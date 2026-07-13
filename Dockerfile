@@ -35,19 +35,25 @@ RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs && \
     chown -R nextjs:nodejs /app
 
+# Apply migrations and seed before switching user
+RUN echo "Starting migrations..." && \
+    npx prisma migrate deploy && \
+    echo "Migrations completed" && \
+    npm run db:seed && \
+    echo "Seed completed"
+
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:3000/ || exit 1
 
-# Run migrations and seed as root (migrations need permissions)
-RUN npx prisma migrate deploy || true && \
-    npm run db:seed || true
-
-# Switch to nextjs user for app
+# Switch to nextjs user
 USER nextjs
-EXPOSE 3000
+
+# Set environment variables
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-# Start application
-CMD ["node", "server.js"]
+EXPOSE 3000
+
+# Start with standalone server.js (not 'next start')
+CMD ["node", ".next/standalone/server.js"]
