@@ -1,30 +1,34 @@
 services:
-  - type: web
-    name: alwissam-dental
-    env: node
-    plan: free
-    buildCommand: npm run build
-    startCommand: npm start
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: NEXT_TELEMETRY_DISABLED
-        value: "1"
-      - key: COOKIE_SECURE
-        value: "true"
-      - key: PORT
-        value: 3000
-    healthCheckPath: /
-    routes:
-      - path: /
-
+  # PostgreSQL Database
   - type: pserv
     name: alwissam-postgres
     plan: free
     ipAllowList: []
     postgresMajorVersion: 16
 
+  # Redis Cache Service
   - type: redis
     name: alwissam-redis
     plan: free
     ipAllowList: []
+
+  # Web Application
+  - type: web
+    name: alwissam-dental-app
+    env: node
+    plan: free
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    healthCheckStartupFailureThresholdCount: 10
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      - key: PORT
+        value: 3000
+      - key: COOKIE_SECURE
+        value: "true"
+    routes:
+      - path: /
