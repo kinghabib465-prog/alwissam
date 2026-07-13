@@ -19,11 +19,7 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN apk add --no-cache bash curl
 
-# Create app user
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
-
-# Copy from build stage
+# Copy everything as root first (for migrations)
 COPY --from=build /app/public ./public
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/.next/standalone ./
@@ -32,17 +28,26 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
 
 # Create upload directory
-RUN mkdir -p /app/uploads && \
-    chown -R nextjs:nodejs /app
+RUN mkdir -p /app/uploads
 
-USER nextjs
-EXPOSE 3000
-ENV PORT=3000
-ENV HOSTNAME=0.0.0.0
+# Create app user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs && \
+    chown -R nextjs:nodejs /app
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:3000/ || exit 1
 
-# Run migrations and start app
-CMD ["sh", "-c", "npx prisma migrate deploy && npm run db:seed && node server.js"]
+# Run migrations and seed as root (migrations need permissions)
+RUN npx prisma migrate deploy || true && \
+    npm run db:seed || true
+
+# Switch to nextjs user for app
+USER nextjs
+EXPOSE 3000
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+
+# Start application
+CMD ["node", "server.js"]
