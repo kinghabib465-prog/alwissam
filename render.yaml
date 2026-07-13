@@ -1,12 +1,30 @@
 services:
   - type: web
-    name: alwissam
-    runtime: node
+    name: alwissam-dental
+    env: node
     plan: free
-    branch: main
-    buildCommand: npm install && npm run build
+    buildCommand: npm run build
     startCommand: npm start
-    autoDeploy: true
     envVars:
-      - key: NODE_VERSION
-        value: 22
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: PORT
+        value: 3000
+    healthCheckPath: /
+    routes:
+      - path: /
+
+  - type: pserv
+    name: alwissam-postgres
+    plan: free
+    ipAllowList: []
+    postgresMajorVersion: 16
+
+  - type: redis
+    name: alwissam-redis
+    plan: free
+    ipAllowList: []
