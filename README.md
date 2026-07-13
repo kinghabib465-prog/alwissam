@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ﻿# عيادة الوسام لطب الأسنان — منصة الإدارة
 
 منصة إنتاجية لإدارة عيادة أسنان عربية (RTL) مبنية بـ Next.js و PostgreSQL و Prisma و Redis.
@@ -98,3 +99,6 @@ cat backup.sql | docker exec -i alwisam-postgres psql -U alwisam alwisam_dental
 - تحديد معدل لمحاولات الدخول
 - لا تُحذف المدفوعات نهائيًا (إبطال مع سبب)
 - لا ترفع أسرارًا إلى Git
+=======
+"# alwissam" 
+>>>>>>> a35ce186ac8e151e2cca5517b9ceb254e64c4cc3
