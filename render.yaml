@@ -5,8 +5,8 @@ services:
     plan: free
     branch: main
     buildCommand: npm install && npm run build
-    preDeployCommand: npx prisma migrate deploy && node scripts/ensure-staff.mjs
-    startCommand: npx prisma migrate deploy && node scripts/ensure-staff.mjs && next start
+    preDeployCommand: npx prisma migrate deploy
+    startCommand: npx prisma migrate deploy && next start -H 0.0.0.0 -p $PORT
     autoDeploy: true
     envVars:
       - key: NODE_VERSION

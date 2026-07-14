@@ -1,12 +1,12 @@
 /**
- * Production-safe staff bootstrap (no tsx required).
- * Creates clinic roles + staff accounts if missing / refreshes passwords.
+ * Production-safe staff bootstrap (no tsx / Prisma seed CLI required).
  * Safe to run on every Render free-tier start.
  */
 import { PrismaClient, RoleCode, DoctorType, DayOfWeek } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
 import bcrypt from "bcryptjs";
+import { pathToFileURL } from "node:url";
 
 const { Pool } = pg;
 
@@ -56,7 +56,7 @@ async function upsertRole(prisma, code, nameAr) {
   });
 }
 
-async function main() {
+export async function ensureStaff() {
   console.log("[ensure-staff] Starting staff bootstrap...");
   const { prisma, pool } = createPrisma();
 
@@ -202,7 +202,6 @@ async function main() {
       },
     });
 
-    // Ensure clinic_info row exists so pages stop erroring.
     await prisma.clinicSetting.upsert({
       where: { key: "clinic_info" },
       update: {},
@@ -217,7 +216,6 @@ async function main() {
       },
     });
 
-    // Light working hours so calendars are not empty.
     for (const day of [
       DayOfWeek.SUNDAY,
       DayOfWeek.MONDAY,
@@ -242,17 +240,20 @@ async function main() {
       });
     }
 
-    console.log("[ensure-staff] Staff accounts ready:");
-    console.log(`  - ${env("SEED_DOCTOR_SPECIALIST_EMAIL")} / ${env("SEED_DOCTOR_SPECIALIST_PASSWORD")}`);
-    console.log(`  - ${env("SEED_SECRETARY1_EMAIL")} / ${env("SEED_SECRETARY1_PASSWORD")}`);
-    console.log(`  - ${env("SEED_DOCTOR_GENERAL_EMAIL")} / ${env("SEED_DOCTOR_GENERAL_PASSWORD")}`);
+    console.log("[ensure-staff] Staff accounts ready");
   } finally {
     await prisma.$disconnect().catch(() => undefined);
     await pool.end().catch(() => undefined);
   }
 }
 
-main().catch((err) => {
-  console.error("[ensure-staff] FAILED:", err);
-  process.exit(1);
-});
+const isDirectRun =
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isDirectRun) {
+  ensureStaff().catch((err) => {
+    console.error("[ensure-staff] FAILED:", err);
+    process.exit(1);
+  });
+}

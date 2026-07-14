@@ -7,6 +7,8 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
+    // Prisma 7: seed must live here (package.json prisma.seed is ignored)
+    seed: "node ./scripts/ensure-staff.mjs",
   },
   datasource: {
     url: process.env["DATABASE_URL"],
