@@ -6,6 +6,7 @@ import {
   sessionCookieOptions,
 } from "@/lib/auth/session";
 import { createAuditLog } from "@/lib/audit/log";
+import { publicAppUrl } from "@/lib/patient-qr";
 
 /** دخول مباشر عبر مسح QR — بدون كلمة سر */
 export async function GET(
@@ -14,7 +15,7 @@ export async function GET(
 ) {
   const { token } = await ctx.params;
   const clean = String(token || "").trim();
-  const loginUrl = new URL("/patient/login", req.url);
+  const loginUrl = new URL(publicAppUrl("/patient/login", req));
 
   if (!clean || clean.length < 16) {
     return NextResponse.redirect(loginUrl);
@@ -47,7 +48,10 @@ export async function GET(
     reason: `دخول عبر QR — ${account.patient.fullName}`,
   });
 
-  const res = NextResponse.redirect(new URL("/patient/dashboard", req.url));
+  // مهم: لا تستخدم req.url (على Render يكون localhost:10000 داخلياً)
+  const res = NextResponse.redirect(
+    new URL(publicAppUrl("/patient/dashboard", req)),
+  );
   res.cookies.set(
     SESSION_COOKIE,
     session.token,
