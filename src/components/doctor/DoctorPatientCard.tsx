@@ -178,16 +178,14 @@ export function DoctorPatientCard({
       nextSessionDays: 14,
     });
     if (!data) return;
-    const origin =
-      typeof window !== "undefined"
-        ? window.location.origin
-        : process.env.NEXT_PUBLIC_APP_URL;
     setCreds({
       login: data.credentials.login,
       password: data.credentials.password,
-      qrUrl: data.qrAccessToken
-        ? patientQrLoginUrl(data.qrAccessToken, origin)
-        : undefined,
+      qrUrl:
+        data.qrUrl ||
+        (data.qrAccessToken
+          ? patientQrLoginUrl(data.qrAccessToken, window.location.origin)
+          : undefined),
     });
     setOpen(true);
     setOk("تم إنشاء الحساب — اطبع أو سلّم للمريض");

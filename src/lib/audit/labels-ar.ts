@@ -29,6 +29,7 @@ export const auditActionLabelsAr: Record<string, string> = {
   DOCTOR_CHARGE_COLLECTED: "استلام مبلغ المعاينة",
   STAFF_CHAT_TEXT: "رسالة طاقم نصية",
   STAFF_CHAT_VOICE: "رسالة طاقم صوتية",
+  STAFF_CHAT_DELETE: "حذف رسالة طاقم",
 };
 
 export function auditActionLabel(action: string) {

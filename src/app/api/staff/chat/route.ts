@@ -173,3 +173,57 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true, count: created.length });
 }
+
+export async function DELETE(req: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user || !isStaffChatRole(user.role.code)) {
+    return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
+  }
+  if (req.headers.get("x-csrf-token") !== user.csrfToken) {
+    return NextResponse.json({ error: "رمز الحماية غير صالح" }, { status: 403 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const messageId = String(body.messageId || "");
+  if (!messageId) {
+    return NextResponse.json({ error: "معرّف الرسالة مطلوب" }, { status: 400 });
+  }
+
+  const message = await prisma.message.findUnique({ where: { id: messageId } });
+  if (!message || message.patientId) {
+    return NextResponse.json({ error: "الرسالة غير موجودة" }, { status: 404 });
+  }
+
+  const isSender = message.senderId === user.id;
+  const isReceiver = message.receiverId === user.id;
+  const isSecretary = user.role.code === "SECRETARY" || user.role.code === "ADMIN";
+
+  // المرسل يحذف رسالته؛ السكرتير/الإدارة تحذف أي رسالة صوتية واردة أو صادرة في دردشة الطاقم
+  const canDelete =
+    isSender ||
+    (message.kind === "VOICE" && (isReceiver || isSecretary));
+
+  if (!canDelete) {
+    return NextResponse.json({ error: "غير مسموح بحذف هذه الرسالة" }, { status: 403 });
+  }
+
+  if (message.kind !== "VOICE" && !isSender) {
+    return NextResponse.json(
+      { error: "حذف الرسائل النصية متاح لمرسلها فقط" },
+      { status: 403 },
+    );
+  }
+
+  await prisma.message.delete({ where: { id: messageId } });
+
+  await createAuditLog({
+    userId: user.id,
+    roleCode: user.role.code,
+    action: "STAFF_CHAT_DELETE",
+    entityType: "Message",
+    entityId: messageId,
+    reason: `حذف رسالة ${message.kind} بواسطة ${user.fullName}`,
+  });
+
+  return NextResponse.json({ ok: true });
+}

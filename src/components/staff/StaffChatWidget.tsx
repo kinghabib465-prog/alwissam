@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Mic, MessageCircle, Send, Square, X } from "lucide-react";
+import { Mic, MessageCircle, Send, Square, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ChatMessage = {
@@ -104,6 +104,34 @@ export function StaffChatWidget() {
       return;
     }
     setText("");
+    await load();
+  }
+
+  async function deleteMessage(messageId: string, kind: string) {
+    if (!csrf) return;
+    if (
+      !window.confirm(
+        kind === "VOICE" ? "حذف الرسالة الصوتية؟" : "حذف الرسالة؟",
+      )
+    ) {
+      return;
+    }
+    setLoading(true);
+    setError("");
+    const res = await fetch("/api/staff/chat", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        "x-csrf-token": csrf,
+      },
+      body: JSON.stringify({ messageId }),
+    });
+    setLoading(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "تعذر الحذف");
+      return;
+    }
     await load();
   }
 
@@ -239,9 +267,34 @@ export function StaffChatWidget() {
                       </p>
                     ) : null}
                     {m.kind === "VOICE" && m.audioUrl ? (
-                      <audio controls src={m.audioUrl} className="w-full max-w-[220px]" />
+                      <div className="space-y-1">
+                        <audio controls src={m.audioUrl} className="w-full max-w-[220px]" />
+                        <button
+                          type="button"
+                          onClick={() => void deleteMessage(m.id, "VOICE")}
+                          className={cn(
+                            "inline-flex items-center gap-1 text-[10px] font-semibold",
+                            m.mine ? "text-white/85 hover:text-white" : "text-danger hover:underline",
+                          )}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          حذف الصوت
+                        </button>
+                      </div>
                     ) : (
-                      <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                      <div>
+                        <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                        {m.mine ? (
+                          <button
+                            type="button"
+                            onClick={() => void deleteMessage(m.id, "TEXT")}
+                            className="mt-1 inline-flex items-center gap-1 text-[10px] text-white/80 hover:text-white"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            حذف
+                          </button>
+                        ) : null}
+                      </div>
                     )}
                     <p
                       className={cn(

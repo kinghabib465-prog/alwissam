@@ -5,11 +5,22 @@ import { prisma } from "@/lib/db/prisma";
 import { createAuditLog } from "@/lib/audit/log";
 import { hashPassword } from "@/lib/auth/password";
 import { generateNumber } from "@/lib/utils";
-import { generateQrAccessToken } from "@/lib/patient-qr";
+import { generateQrAccessToken, getAppOrigin, patientQrLoginUrl } from "@/lib/patient-qr";
 
 function generateReadablePassword() {
   const part = randomBytes(3).toString("hex");
   return `Wisam-${part}`;
+}
+
+function requestOrigin(req: NextRequest) {
+  const proto = req.headers.get("x-forwarded-proto");
+  const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
+  if (proto && host) return `${proto.split(",")[0]!.trim()}://${host.split(",")[0]!.trim()}`;
+  try {
+    return new URL(req.url).origin;
+  } catch {
+    return null;
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -94,6 +105,7 @@ export async function POST(req: NextRequest) {
         password: plainPassword,
       },
       qrAccessToken,
+      qrUrl: patientQrLoginUrl(qrAccessToken, getAppOrigin(requestOrigin(req))),
     });
   }
 
@@ -210,6 +222,7 @@ export async function POST(req: NextRequest) {
       password: plainPassword,
     },
     qrAccessToken,
+    qrUrl: patientQrLoginUrl(qrAccessToken, getAppOrigin(requestOrigin(req))),
     nextAppointment: {
       id: result.appointment.id,
       startAt: result.appointment.startAt.toISOString(),

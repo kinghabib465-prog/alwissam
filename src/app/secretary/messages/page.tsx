@@ -4,6 +4,7 @@ import { Card, EmptyState } from "@/components/ui/Card";
 import { navSecretaryAr } from "@/i18n/ar";
 import { prisma } from "@/lib/db/prisma";
 import { roleLabelAr } from "@/lib/staff-chat";
+import { DeleteVoiceButton } from "@/components/staff/DeleteVoiceButton";
 
 export const dynamic = "force-dynamic";
 
@@ -79,9 +80,21 @@ export default async function Page() {
                       {m.createdAt.toLocaleString("en-GB")}
                     </p>
                     {m.kind === "VOICE" && m.audioUrl ? (
-                      <audio controls src={m.audioUrl} className="mt-2 w-full max-w-md" />
+                      <div className="mt-2 space-y-2">
+                        <audio
+                          controls
+                          src={m.audioUrl}
+                          className="w-full max-w-md"
+                        />
+                        <DeleteVoiceButton
+                          messageId={m.id}
+                          csrfToken={user.csrfToken}
+                        />
+                      </div>
                     ) : (
-                      <p className="mt-1 whitespace-pre-wrap text-navy">{m.body}</p>
+                      <p className="mt-1 whitespace-pre-wrap text-navy">
+                        {m.body}
+                      </p>
                     )}
                   </li>
                 ))}

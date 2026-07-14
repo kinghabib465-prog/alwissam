@@ -4,7 +4,7 @@ import {
   waitingRoomStatusAr,
 } from "@/i18n/ar";
 import { formatClinicAppointmentDay, formatClinicDate } from "@/lib/clinic-date";
-import { generateQrAccessToken, patientQrLoginUrl } from "@/lib/patient-qr";
+import { generateQrAccessToken, getAppOrigin, patientQrLoginUrl } from "@/lib/patient-qr";
 import type { PatientRowData } from "@/components/doctor/DoctorPatientCard";
 
 const PAYMENT_METHOD_AR: Record<string, string> = {
@@ -112,7 +112,7 @@ export async function loadDoctorPatients(
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  const appOrigin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appOrigin = getAppOrigin();
 
   return patients.map((p) => {
     const waiting = p.waitingRoomEntries[0];
