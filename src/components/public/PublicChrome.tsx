@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ClinicLogo } from "@/components/branding/ClinicLogo";
 import { Button } from "@/components/ui/Button";
+import { loadClinicContact } from "@/lib/clinic-contact";
 
 const links = [
   { href: "/", label: "الرئيسية" },
@@ -40,7 +41,13 @@ export function PublicHeader() {
   );
 }
 
-export function PublicFooter() {
+export async function PublicFooter() {
+  const contact = await loadClinicContact();
+  const phone = contact.phone || process.env.CLINIC_PHONE || "0550000000";
+  const email = contact.email || process.env.CLINIC_EMAIL || "contact@alwisam.dz";
+  const address = contact.address || process.env.CLINIC_ADDRESS || "الجزائر";
+  const mapsHref = contact.mapsLink || contact.mapsEmbedUrl || "/contact";
+
   return (
     <footer className="mt-16 border-t border-border bg-navy text-white">
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 md:grid-cols-3">
@@ -61,11 +68,28 @@ export function PublicFooter() {
           </div>
         </div>
         <div>
-          <h3 className="font-semibold">تواصل</h3>
+          <h3 className="font-semibold">تواصل معنا</h3>
           <div className="mt-3 space-y-2 text-sm text-white/75">
-            <p className="font-latin">{process.env.CLINIC_PHONE || "0550000000"}</p>
-            <p className="font-latin">{process.env.CLINIC_EMAIL || "contact@alwisam.dz"}</p>
-            <p>{process.env.CLINIC_ADDRESS || "الجزائر"}</p>
+            <p className="font-latin" data-numeric="true" dir="ltr">
+              {phone}
+            </p>
+            <p className="font-latin" dir="ltr">
+              {email}
+            </p>
+            <p>{address}</p>
+            <Link href="/contact" className="inline-block text-soft-teal hover:underline">
+              صفحة تواصل معنا والخريطة
+            </Link>
+            {contact.mapsLink || contact.mapsEmbedUrl ? (
+              <a
+                href={mapsHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-soft-teal hover:underline"
+              >
+                فتح الموقع على Google Maps
+              </a>
+            ) : null}
             <Link href="/staff/login" className="inline-block pt-2 text-soft-teal hover:underline">
               دخول الطاقم الطبي
             </Link>

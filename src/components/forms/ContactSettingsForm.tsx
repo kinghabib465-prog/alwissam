@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { FormField, Input, Textarea } from "@/components/ui/Form";
+import { toGoogleMapsEmbedUrl, toGoogleMapsOpenUrl } from "@/lib/maps-url";
 
 /** إعدادات صفحة تواصل معنا + خريطة Google */
 export function ContactSettingsForm({
@@ -24,11 +25,18 @@ export function ContactSettingsForm({
   const [form, setForm] = useState(initial);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+
+  const previewEmbed = useMemo(
+    () => toGoogleMapsEmbedUrl(form.mapsEmbedUrl || form.mapsLink),
+    [form.mapsEmbedUrl, form.mapsLink],
+  );
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setMsg("");
+    setErr("");
     const res = await fetch("/api/admin/clinic-settings", {
       method: "PUT",
       headers: {
@@ -38,8 +46,13 @@ export function ContactSettingsForm({
       body: JSON.stringify({ section: "contact", ...form }),
     });
     setLoading(false);
-    setMsg(res.ok ? "تم حفظ التواصل والخريطة" : "فشل الحفظ");
-    if (res.ok) router.refresh();
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setErr(data.error || "فشل الحفظ");
+      return;
+    }
+    setMsg("تم حفظ التواصل والخريطة");
+    router.refresh();
   }
 
   return (
@@ -71,46 +84,44 @@ export function ContactSettingsForm({
         />
       </FormField>
       <FormField
-        label="رابط Google Maps (فتح الموقع)"
-        hint="من مشاركة الموقع في خرائط جوجل — انسخ الرابط"
-      >
-        <Input
-          className="font-latin"
-          dir="ltr"
-          value={form.mapsLink}
-          onChange={(e) => setForm({ ...form, mapsLink: e.target.value })}
-          placeholder="https://maps.google.com/..."
-        />
-      </FormField>
-      <FormField
-        label="رابط تضمين الخريطة (Embed)"
-        hint="في خرائط جوجل: مشاركة → تضمين خريطة → انسخ رابط src داخل iframe"
+        label="رابط الموقع على Google Maps"
+        hint="الصق أي رابط من خرائط جوجل (مشاركة / فتح في الخرائط) أو كود iframe كاملاً — يُحوَّل تلقائياً للعرض"
       >
         <Textarea
           className="font-latin"
           dir="ltr"
           rows={3}
-          value={form.mapsEmbedUrl}
-          onChange={(e) => setForm({ ...form, mapsEmbedUrl: e.target.value })}
-          placeholder="https://www.google.com/maps/embed?..."
+          value={form.mapsEmbedUrl || form.mapsLink}
+          onChange={(e) => {
+            const value = e.target.value;
+            setForm({
+              ...form,
+              mapsEmbedUrl: value,
+              mapsLink: toGoogleMapsOpenUrl(value) || form.mapsLink,
+            });
+          }}
+          placeholder="https://maps.app.goo.gl/... أو https://www.google.com/maps/embed?..."
         />
       </FormField>
-      {form.mapsEmbedUrl && (
+      {previewEmbed ? (
         <div className="overflow-hidden rounded-2xl border border-border">
           <iframe
             title="معاينة الخريطة"
-            src={form.mapsEmbedUrl}
+            src={previewEmbed}
             className="h-56 w-full border-0"
             loading="lazy"
             referrerPolicy="no-referrer-when-downgrade"
             allowFullScreen
           />
         </div>
+      ) : (
+        <p className="text-sm text-muted">أضف رابط الخريطة لمعاينة المكان هنا</p>
       )}
       <Button type="submit" variant="teal" loading={loading}>
         حفظ التواصل
       </Button>
       {msg && <p className="text-sm text-teal">{msg}</p>}
+      {err && <p className="text-sm text-danger">{err}</p>}
     </form>
   );
 }

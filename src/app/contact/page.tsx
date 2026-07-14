@@ -1,35 +1,18 @@
 import { PublicFooter, PublicHeader } from "@/components/public/PublicChrome";
 import { Card } from "@/components/ui/Card";
-import { prisma } from "@/lib/db/prisma";
+import { loadClinicContact } from "@/lib/clinic-contact";
+import { toGoogleMapsEmbedUrl } from "@/lib/maps-url";
 
 export const dynamic = "force-dynamic";
 
-type ClinicInfo = {
-  nameAr?: string;
-  phone?: string;
-  email?: string;
-  address?: string;
-  mapsEmbedUrl?: string;
-  mapsLink?: string;
-};
-
 export default async function ContactPage() {
-  let info: ClinicInfo = {};
-  try {
-    const row = await prisma.clinicSetting.findUnique({
-      where: { key: "clinic_info" },
-    });
-    info = (row?.value || {}) as ClinicInfo;
-  } catch {
-    info = {};
-  }
-
-  const phone = info.phone || process.env.CLINIC_PHONE || "0550000000";
-  const email = info.email || process.env.CLINIC_EMAIL || "contact@alwisam.dz";
-  const address = info.address || process.env.CLINIC_ADDRESS || "الجزائر";
+  const info = await loadClinicContact();
+  const phone = info.phone || "0550000000";
+  const email = info.email || "contact@alwisam.dz";
+  const address = info.address || "الجزائر";
   const name = info.nameAr || "عيادة الوسام لطب الأسنان";
-  const embed = info.mapsEmbedUrl || process.env.CLINIC_MAP_EMBED_URL || "";
-  const mapsLink = info.mapsLink || "";
+  const embed = toGoogleMapsEmbedUrl(info.mapsEmbedUrl || info.mapsLink || "");
+  const mapsLink = info.mapsLink || info.mapsEmbedUrl || "";
 
   return (
     <div className="min-h-screen bg-background">
@@ -44,7 +27,7 @@ export default async function ContactPage() {
             </p>
             <p className="font-latin text-sm">{email}</p>
             <p className="text-sm">{address}</p>
-            {mapsLink && (
+            {mapsLink ? (
               <a
                 href={mapsLink}
                 target="_blank"
@@ -53,7 +36,7 @@ export default async function ContactPage() {
               >
                 فتح الموقع على Google Maps
               </a>
-            )}
+            ) : null}
           </Card>
           <Card className="overflow-hidden p-0">
             {embed ? (

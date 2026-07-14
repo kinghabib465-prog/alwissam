@@ -27,7 +27,7 @@ export default async function ContactSettingsPage() {
     <DashboardShell items={navDoctorSpecialistAr as never} userName={user.fullName}>
       <TopHeader
         title="تواصل معنا"
-        subtitle="الهاتف · العنوان · موقع Google Maps"
+        subtitle="نفس بيانات صفحة الموقع العامة — الهاتف · العنوان · الخريطة"
       />
       <Card>
         <ContactSettingsForm

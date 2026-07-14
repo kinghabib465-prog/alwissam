@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth/current-user";
 import { isClinicOwner } from "@/lib/auth/clinic-owner";
 import { prisma } from "@/lib/db/prisma";
 import { createAuditLog } from "@/lib/audit/log";
+import { normalizeMapsFields } from "@/lib/maps-url";
 
 export async function PUT(req: NextRequest) {
   const user = await getCurrentUser();
@@ -52,10 +53,10 @@ export async function PUT(req: NextRequest) {
       where: { key: "clinic_info" },
     });
     const prev = (existing?.value || {}) as Record<string, string>;
-    let mapsEmbedUrl = String(body.mapsEmbedUrl || "").trim();
-    // إن لصق المستخدم كود iframe كامل نستخرج src
-    const iframeSrc = mapsEmbedUrl.match(/src=["']([^"']+)["']/i);
-    if (iframeSrc) mapsEmbedUrl = iframeSrc[1]!;
+    const maps = normalizeMapsFields({
+      mapsEmbedUrl: String(body.mapsEmbedUrl || ""),
+      mapsLink: String(body.mapsLink || ""),
+    });
 
     const value = {
       ...prev,
@@ -63,8 +64,8 @@ export async function PUT(req: NextRequest) {
       phone: String(body.phone ?? prev.phone ?? "").trim(),
       email: String(body.email ?? prev.email ?? "").trim(),
       address: String(body.address ?? prev.address ?? "").trim(),
-      mapsEmbedUrl,
-      mapsLink: String(body.mapsLink || "").trim(),
+      mapsEmbedUrl: maps.mapsEmbedUrl,
+      mapsLink: maps.mapsLink,
     };
     await prisma.clinicSetting.upsert({
       where: { key: "clinic_info" },
@@ -80,7 +81,7 @@ export async function PUT(req: NextRequest) {
       newValue: value,
       reason: `تحديث تواصل معنا بواسطة ${user.fullName}`,
     });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, maps });
   }
 
   if (section === "doctor_profile") {
