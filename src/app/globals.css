@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+:root {
+  --primary-navy: #0f2747;
+  --primary-blue: #176b87;
+  --medical-teal: #0f9a9a;
+  --soft-teal: #ddf5f4;
+  --success: #16a36a;
+  --warning: #f59e0b;
+  --danger: #d9485f;
+  --background: #f5f8fc;
+  --surface: #ffffff;
+  --border: #dce4ee;
+  --text-primary: #162033;
+  --text-secondary: #667085;
+  --text-muted: #98a2b3;
+  --radius: 16px;
+  --shadow: 0 4px 20px rgba(15, 39, 71, 0.06);
+}
+
+@theme inline {
+  --color-navy: var(--primary-navy);
+  --color-blue: var(--primary-blue);
+  --color-teal: var(--medical-teal);
+  --color-soft-teal: var(--soft-teal);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-foreground: var(--text-primary);
+  --color-muted: var(--text-secondary);
+  --color-muted-foreground: var(--text-muted);
+  --font-sans: var(--font-cairo), var(--font-inter), Arial, sans-serif;
+  --font-latin: var(--font-inter), Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  direction: rtl;
+  /* أرقام لاتينية غربية عبر إعدادات اللغة */
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+body {
+  background: var(--background);
+  color: var(--text-primary);
+  font-family: var(--font-cairo), var(--font-inter), Arial, sans-serif;
+  min-height: 100vh;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* كل الحقول والقوائم والنوافذ تستخدم أرقامًا غربية */
+.font-latin,
+.tabular-nums,
+time,
+input,
+select,
+textarea,
+option,
+input[type="number"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"],
+input[type="week"],
+input[type="tel"],
+[data-numeric="true"] {
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+input[type="number"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"],
+input[type="week"],
+input[type="tel"],
+select,
+.font-latin {
+  font-family: var(--font-inter), Arial, sans-serif !important;
+}
+
+.card-surface {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.dashboard-gradient {
+  background: linear-gradient(135deg, #0f2747 0%, #176b87 55%, #0f9a9a 100%);
+}
+
+.login-hero {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(15, 154, 154, 0.25), transparent 40%),
+    linear-gradient(145deg, #0f2747 0%, #176b87 100%);
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid var(--medical-teal);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c5d0de;
+  border-radius: 999px;
+}
