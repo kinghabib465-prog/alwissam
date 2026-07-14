@@ -517,6 +517,23 @@ export async function checkInScheduledAppointment(params: {
     throw new Error("لا يمكن إدخال هذا الموعد");
   }
 
+  // لا تُدخل مريضاً لديه حضور فعّال في العيادة على موعد آخر
+  const { start: dayStart } = await import("@/lib/daily-queue").then((m) =>
+    m.algiersDayBounds(),
+  );
+  const busy = await prisma.waitingRoomEntry.findFirst({
+    where: {
+      patientId: appointment.patientId,
+      status: { in: ["ARRIVED", "WAITING", "WITH_DOCTOR", "SESSION_DONE"] },
+      arrivedAt: { gte: dayStart },
+    },
+  });
+  if (busy) {
+    throw new Error(
+      "المريض موجود أصلاً في التوجيه/العيادة — لا حاجة لإدخاله من مواعيد اليوم",
+    );
+  }
+
   const doctorId = params.doctorId || appointment.doctorId;
   const now = new Date();
 

@@ -8,6 +8,7 @@ import { SecretaryRequestBar } from "@/components/secretary/SecretaryRequestBar"
 import { SecretaryAutoRefresh } from "@/components/secretary/SecretaryAutoRefresh";
 import { SecretaryWalkInForm } from "@/components/secretary/SecretaryWalkInForm";
 import { algiersDayBounds } from "@/lib/daily-queue";
+import { countSecretaryTodayPendingCheckIns } from "@/lib/secretary-today";
 import { DayOfWeek } from "@prisma/client";
 import { toLatinDigits } from "@/lib/latin-digits";
 
@@ -37,26 +38,7 @@ export default async function SecretaryDashboardPage() {
       orderBy: { createdAt: "asc" },
       take: 100,
     }),
-    prisma.appointment.count({
-      where: {
-        deletedAt: null,
-        startAt: { gte: start, lt: end },
-        status: {
-          in: [
-            "CONFIRMED",
-            "REMINDER_SENT",
-            "DOCTOR_ASSIGNED",
-            "PATIENT_ARRIVED",
-            "WAITING_ROOM",
-          ],
-        },
-        patient: { deletedAt: null },
-        OR: [
-          { waitingRoomEntry: null },
-          { waitingRoomEntry: { status: "LEFT" } },
-        ],
-      },
-    }),
+    countSecretaryTodayPendingCheckIns(),
     prisma.doctor.findMany({
       where: { isActive: true },
       include: {
