@@ -163,7 +163,7 @@ export function DoctorPatientsList({
       </div>
 
       <p className="text-xs text-muted">
-        مرتّب حسب أقرب موعد · اضغط المريض للمعلومات وQR والموعد
+        اضغط «إدارة» — تبويب واحد لكل مهمة (نظرة عامة · موعد · حساب · بيانات)
       </p>
 
       {visible.length === 0 ? (

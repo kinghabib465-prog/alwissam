@@ -7,16 +7,15 @@ import { Button } from "@/components/ui/Button";
 import { FormField, Input } from "@/components/ui/Form";
 import { splitPatientName } from "@/lib/patient-name";
 import { PrintCredentials } from "@/components/patient/PrintCredentials";
-import {
-  PatientAccountPanel,
-  PatientQrCode,
-} from "@/components/patient/PatientQrCode";
+import { PatientQrCode } from "@/components/patient/PatientQrCode";
 import { toLatinDigits } from "@/lib/latin-digits";
 import type { DoctorAvailability } from "@/lib/doctor-availability";
 import { nextWorkingYmd } from "@/lib/doctor-availability";
 import { AppointmentDatePicker } from "@/components/doctor/AppointmentDatePicker";
 import { patientQrLoginUrl } from "@/lib/patient-qr";
 import { formatCurrencyDZD } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { ChevronDown, CalendarDays, UserRound, Wallet, QrCode } from "lucide-react";
 
 export type PatientPaymentRow = {
   id: string;
@@ -56,9 +55,16 @@ export type PatientRowData = {
   };
 };
 
-type Panel = "none" | "schedule" | "edit" | "account" | "finance";
+type TabKey = "overview" | "schedule" | "account" | "edit";
 
-/** قائمة مرضاي — إدارة منظمة بدون إرهاق الطبيب */
+const TABS: { key: TabKey; label: string; icon: typeof CalendarDays }[] = [
+  { key: "overview", label: "نظرة عامة", icon: Wallet },
+  { key: "schedule", label: "موعد", icon: CalendarDays },
+  { key: "account", label: "حساب / QR", icon: QrCode },
+  { key: "edit", label: "بيانات", icon: UserRound },
+];
+
+/** إدارة مريض واحدة — تبويب واحد في كل مرة، بدون تكدّس نوافذ */
 export function DoctorPatientCard({
   patient,
   csrfToken,
@@ -74,10 +80,11 @@ export function DoctorPatientCard({
   const router = useRouter();
   const { firstName, lastName } = splitPatientName(patient.fullName);
   const [open, setOpen] = useState(false);
-  const [panel, setPanel] = useState<Panel>("none");
+  const [tab, setTab] = useState<TabKey>("overview");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
+  const [showPayments, setShowPayments] = useState(false);
   const [creds, setCreds] = useState<{
     login: string;
     password: string;
@@ -106,8 +113,15 @@ export function DoctorPatientCard({
   const [selectedDate, setSelectedDate] = useState(defaultDate);
   const finance = patient.finance;
 
-  function togglePanel(next: Panel) {
-    setPanel((p) => (p === next ? "none" : next));
+  function openManage() {
+    setOpen(true);
+    setTab("overview");
+    setError("");
+    setOk("");
+  }
+
+  function switchTab(next: TabKey) {
+    setTab(next);
     setError("");
     setOk("");
   }
@@ -140,10 +154,7 @@ export function DoctorPatientCard({
     }
     const body =
       editExisting && patient.nextAppointmentId
-        ? {
-            appointmentId: patient.nextAppointmentId,
-            date: selectedDate,
-          }
+        ? { appointmentId: patient.nextAppointmentId, date: selectedDate }
         : {
             patientId: patient.id,
             date: selectedDate,
@@ -156,8 +167,7 @@ export function DoctorPatientCard({
       body,
     );
     if (!data) return;
-    setOk(editExisting ? "تم تعديل يوم الموعد" : "تم حجز الموعد لليوم المحدد");
-    setPanel("none");
+    setOk(editExisting ? "تم تعديل يوم الموعد" : "تم حجز الموعد");
     router.refresh();
   }
 
@@ -187,8 +197,8 @@ export function DoctorPatientCard({
           ? patientQrLoginUrl(data.qrAccessToken, window.location.origin)
           : undefined),
     });
-    setOpen(true);
-    setOk("تم إنشاء الحساب — اطبع أو سلّم للمريض");
+    setOk("تم إنشاء الحساب — اطبع الورقة أو سلّمها للمريض");
+    setTab("account");
     router.refresh();
   }
 
@@ -205,7 +215,7 @@ export function DoctorPatientCard({
   }
 
   async function deactivateAccount() {
-    if (!confirm("تعطيل حساب دخول المريض؟ (يبقى في القائمة)")) return;
+    if (!confirm("تعطيل حساب دخول المريض؟")) return;
     const data = await api("/api/doctor/patient", "DELETE", {
       patientId: patient.id,
       scope: "account",
@@ -213,16 +223,11 @@ export function DoctorPatientCard({
     if (!data) return;
     setOk("تم تعطيل الحساب");
     setCreds(null);
-    setPanel("none");
     router.refresh();
   }
 
   async function deletePatient() {
-    if (
-      !confirm(
-        "حذف المريض من قائمتك؟ سيتم تعطيل حسابه أيضاً إن وُجد. لا يمكن التراجع بسهولة.",
-      )
-    ) {
+    if (!confirm("حذف المريض من قائمتك؟ سيتم تعطيل حسابه أيضاً إن وُجد.")) {
       return;
     }
     const data = await api("/api/doctor/patient", "DELETE", {
@@ -279,12 +284,18 @@ export function DoctorPatientCard({
         : "text-muted";
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
-      {/* صف مضغوط */}
+    <div
+      className={cn(
+        "overflow-hidden rounded-2xl border bg-white transition",
+        open ? "border-teal/35 shadow-md" : "border-border shadow-sm",
+      )}
+    >
+      {/* صف مضغوط — نظرة سريعة فقط */}
       <button
         type="button"
-        className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-right transition hover:bg-[#F8FBFC]"
-        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-3 px-4 py-3.5 text-right transition hover:bg-[#F8FBFC]"
+        onClick={() => (open ? setOpen(false) : openManage())}
+        aria-expanded={open}
       >
         <div className="min-w-0 flex-1">
           <p className="truncate text-base font-bold text-navy">
@@ -305,437 +316,449 @@ export function DoctorPatientCard({
               <span>بدون موعد</span>
             )}
             <span aria-hidden>·</span>
-            <span>
-              حصص{" "}
-              <span className="font-latin font-semibold">
-                {toLatinDigits(patient.sessionsCount)}
-              </span>
+            <span className="font-latin">
+              {toLatinDigits(patient.sessionsCount)} حصص
             </span>
-            {finance && finance.totalPaid > 0 ? (
+            {finance && finance.remaining > 0 ? (
+              <>
+                <span aria-hidden>·</span>
+                <span className="text-danger">
+                  متبقي {formatCurrencyDZD(finance.remaining)}
+                </span>
+              </>
+            ) : finance && finance.totalPaid > 0 ? (
               <>
                 <span aria-hidden>·</span>
                 <span className={paidToneClass}>
                   دفع {formatCurrencyDZD(finance.totalPaid)}
                 </span>
               </>
-            ) : patient.paidLabel === "لم يدفع" ||
-              patient.paidLabel === "متبقي" ? (
-              <>
-                <span aria-hidden>·</span>
-                <span className="text-danger">{patient.paidLabel}</span>
-              </>
             ) : null}
           </p>
         </div>
-        <span className="shrink-0 rounded-xl bg-soft-teal px-3 py-1.5 text-xs font-bold text-teal">
-          {open ? "إخفاء" : "إدارة"}
+        <span
+          className={cn(
+            "inline-flex shrink-0 items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-bold transition",
+            open ? "bg-navy text-white" : "bg-soft-teal text-teal",
+          )}
+        >
+          {open ? "إغلاق" : "إدارة"}
+          <ChevronDown
+            className={cn("h-3.5 w-3.5 transition", open && "rotate-180")}
+          />
         </span>
       </button>
 
       {open && (
-        <div className="space-y-3 border-t border-border bg-[#F8FBFC]/40 px-4 py-4">
-          {/* 1 — البيانات */}
-          <section className="rounded-xl border border-border/80 bg-white p-3">
-            <p className="mb-2 text-xs font-bold tracking-wide text-muted">
-              بيانات المريض
-            </p>
-            <div className="grid gap-1.5 text-sm sm:grid-cols-2">
-              <p>
-                الهاتف:{" "}
-                <span className="font-latin font-semibold">
-                  {toLatinDigits(patient.phone || "—")}
-                </span>
-              </p>
-              {patient.age != null && (
-                <p>
-                  العمر:{" "}
-                  <span className="font-latin">
-                    {toLatinDigits(patient.age)}
-                  </span>
-                </p>
-              )}
-              {patient.city && <p>المدينة: {patient.city}</p>}
-              {patient.email && (
-                <p className="sm:col-span-2">
-                  البريد:{" "}
-                  <span className="font-latin">{patient.email}</span>
-                </p>
-              )}
-              {patient.allergies && (
-                <p className="sm:col-span-2 text-danger">
-                  حساسية: {patient.allergies}
-                </p>
-              )}
-              <p className="sm:col-span-2">
-                الموعد القادم:{" "}
-                <span className="font-semibold text-teal">
-                  {patient.nextLabel
-                    ? toLatinDigits(patient.nextLabel)
-                    : "غير محدد"}
-                </span>
-              </p>
-            </div>
-          </section>
-
-          {/* 2 — التكاليف */}
-          <section className="rounded-xl border border-border/80 bg-white p-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-xs font-bold tracking-wide text-muted">
-                التكاليف منذ بداية العلاج
-              </p>
-              {finance && finance.payments.length > 0 ? (
-                <button
-                  type="button"
-                  className="text-xs font-bold text-teal hover:underline"
-                  onClick={() => togglePanel("finance")}
-                >
-                  {panel === "finance" ? "إخفاء التفاصيل" : "عرض الدفعات"}
-                </button>
-              ) : null}
-            </div>
-            {finance && (finance.totalBilled > 0 || finance.totalPaid > 0) ? (
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="rounded-lg bg-[#F0F7F8] px-2 py-2">
-                  <p className="text-[10px] text-muted">الإجمالي</p>
-                  <p className="mt-0.5 text-sm font-bold text-navy font-latin">
-                    {formatCurrencyDZD(finance.totalBilled)}
-                  </p>
-                </div>
-                <div className="rounded-lg bg-soft-teal/40 px-2 py-2">
-                  <p className="text-[10px] text-muted">مدفوع</p>
-                  <p className="mt-0.5 text-sm font-bold text-teal font-latin">
-                    {formatCurrencyDZD(finance.totalPaid)}
-                  </p>
-                </div>
-                <div
-                  className={`rounded-lg px-2 py-2 ${
-                    finance.remaining > 0
-                      ? "bg-red-50"
-                      : "bg-[#F0F7F8]"
-                  }`}
-                >
-                  <p className="text-[10px] text-muted">المتبقي</p>
-                  <p
-                    className={`mt-0.5 text-sm font-bold font-latin ${
-                      finance.remaining > 0 ? "text-danger" : "text-navy"
-                    }`}
+        <div className="border-t border-border">
+          {/* تبويبات — قسم واحد فقط يظهر */}
+          {canManage ? (
+            <div
+              className="flex gap-1 overflow-x-auto border-b border-border bg-[#F5F8FB] px-2 py-2"
+              role="tablist"
+            >
+              {TABS.map((t) => {
+                const Icon = t.icon;
+                const active = tab === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => switchTab(t.key)}
+                    className={cn(
+                      "inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition",
+                      active
+                        ? "bg-white text-navy shadow-sm ring-1 ring-border"
+                        : "text-muted hover:bg-white/70 hover:text-navy",
+                    )}
                   >
-                    {formatCurrencyDZD(finance.remaining)}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted">لا فواتير مسجّلة بعد</p>
-            )}
-
-            {panel === "finance" && finance && finance.payments.length > 0 && (
-              <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto border-t border-border pt-3">
-                {finance.payments.map((pay) => (
-                  <li
-                    key={pay.id}
-                    className="flex items-start justify-between gap-2 text-sm"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-semibold text-navy">
-                        {toLatinDigits(pay.dateLabel)}
-                      </p>
-                      <p className="text-xs text-muted">
-                        {pay.method}
-                        {pay.receiptNumber
-                          ? ` · ${toLatinDigits(pay.receiptNumber)}`
-                          : ""}
-                      </p>
-                    </div>
-                    <p className="shrink-0 font-latin font-bold text-teal">
-                      {formatCurrencyDZD(pay.amount)}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          {/* 3 — الحساب و QR */}
-          {(patient.hasAccount && patient.qrUrl) || creds ? (
-            <section>
-              {patient.hasAccount && patient.qrUrl && !creds ? (
-                <PatientAccountPanel
-                  login={patient.accountLogin || patient.phone}
-                  qrUrl={patient.qrUrl}
-                  nextLabel={patient.nextLabel}
-                  sessionsCount={patient.sessionsCount}
-                />
-              ) : null}
-              {creds && (
-                <PrintCredentials
-                  patientName={patient.fullName}
-                  login={creds.login}
-                  password={creds.password}
-                  qrUrl={creds.qrUrl}
-                  nextLabel={patient.nextLabel}
-                  sessionsCount={patient.sessionsCount}
-                />
-              )}
-              {(patient.qrUrl || creds?.qrUrl) && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" onClick={printQr}>
-                    طباعة QR
-                  </Button>
-                </div>
-              )}
-            </section>
+                    <Icon className="h-3.5 w-3.5" />
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
           ) : null}
 
-          {/* شريط إجراءات منظم */}
-          {canManage && (
-            <div className="flex flex-wrap gap-2 border-t border-border pt-3">
-              <Button
-                size="sm"
-                className={
-                  panel === "schedule"
-                    ? "bg-teal hover:bg-[#0c8282]"
-                    : "bg-teal/15 text-teal hover:bg-teal/25"
-                }
-                onClick={() => togglePanel("schedule")}
-              >
-                موعد
-              </Button>
-              <Button
-                size="sm"
-                className={
-                  panel === "account"
-                    ? "bg-violet-600 hover:bg-violet-700"
-                    : "bg-violet-100 text-violet-900 hover:bg-violet-200"
-                }
-                onClick={() => togglePanel("account")}
-              >
-                {patient.hasAccount ? "الحساب" : "إنشاء حساب"}
-              </Button>
-              <Button
-                size="sm"
-                className={
-                  panel === "edit"
-                    ? "bg-amber-500 hover:bg-amber-600"
-                    : "bg-amber-100 text-amber-900 hover:bg-amber-200"
-                }
-                onClick={() => togglePanel("edit")}
-              >
-                تعديل
-              </Button>
-              <Button
-                size="sm"
-                variant="danger"
-                loading={loading}
-                onClick={deletePatient}
-              >
-                حذف
-              </Button>
-            </div>
-          )}
-
-          {canManage && panel === "schedule" && (
-            <div className="space-y-3 rounded-xl border border-teal/30 bg-soft-teal/15 p-3">
-              <p className="text-sm font-bold text-navy">حجز موعد — يوم فقط</p>
-              {availability && availability.workDays.length > 0 ? (
-                <AppointmentDatePicker
-                  availability={availability}
-                  date={selectedDate || defaultDate}
-                  onDateChange={setSelectedDate}
-                  dayOnly
-                />
-              ) : (
-                <p className="text-sm text-danger">
-                  حدّد أيام عملك من الإعدادات أولاً
-                </p>
-              )}
-              <div className="flex flex-wrap gap-2">
-                {[
-                  ["ORTHO_FOLLOWUP", "متابعة تقويم"],
-                  ["GENERAL_EXAM", "فحص"],
-                  ["POST_OP_FOLLOWUP", "بعد عملية"],
-                  ["OTHER", "أخرى"],
-                ].map(([code, label]) => (
-                  <Button
-                    key={code}
-                    size="sm"
-                    variant={apptType === code ? "teal" : "outline"}
-                    onClick={() => setApptType(code)}
-                  >
-                    {label}
-                  </Button>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="teal"
-                  loading={loading}
-                  disabled={!availability?.workDays.length}
-                  onClick={() => saveSchedule(false)}
-                >
-                  حجز لهذا اليوم
-                </Button>
-                {patient.nextAppointmentId && (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    loading={loading}
-                    disabled={!availability?.workDays.length}
-                    onClick={() => saveSchedule(true)}
-                  >
-                    تعديل يوم الموعد
-                  </Button>
+          <div className="space-y-3 px-4 py-4">
+            {(error || ok) && (
+              <p
+                className={cn(
+                  "rounded-xl px-3 py-2 text-sm font-semibold",
+                  error ? "bg-red-50 text-danger" : "bg-soft-teal/40 text-teal",
                 )}
-              </div>
-            </div>
-          )}
-
-          {canManage && panel === "edit" && (
-            <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
-              <FormField label="الاسم الكامل">
-                <Input
-                  value={info.fullName}
-                  onChange={(e) =>
-                    setInfo({ ...info, fullName: e.target.value })
-                  }
-                />
-              </FormField>
-              <FormField label="الهاتف">
-                <Input
-                  className="font-latin"
-                  value={info.phone}
-                  onChange={(e) =>
-                    setInfo({ ...info, phone: e.target.value })
-                  }
-                />
-              </FormField>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <FormField label="العمر">
-                  <Input
-                    className="font-latin"
-                    value={info.age}
-                    onChange={(e) =>
-                      setInfo({ ...info, age: e.target.value })
-                    }
-                  />
-                </FormField>
-                <FormField label="المدينة">
-                  <Input
-                    value={info.city}
-                    onChange={(e) =>
-                      setInfo({ ...info, city: e.target.value })
-                    }
-                  />
-                </FormField>
-              </div>
-              <FormField label="البريد">
-                <Input
-                  className="font-latin"
-                  value={info.email}
-                  onChange={(e) =>
-                    setInfo({ ...info, email: e.target.value })
-                  }
-                />
-              </FormField>
-              <FormField label="حساسية">
-                <Input
-                  value={info.allergies}
-                  onChange={(e) =>
-                    setInfo({ ...info, allergies: e.target.value })
-                  }
-                />
-              </FormField>
-              <Button
-                size="sm"
-                className="bg-amber-500 hover:bg-amber-600"
-                loading={loading}
-                onClick={saveInfo}
               >
-                حفظ البيانات
-              </Button>
-            </div>
-          )}
+                {error || ok}
+              </p>
+            )}
 
-          {canManage && panel === "account" && (
-            <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50 p-3">
-              {!patient.hasAccount ? (
-                <div className="space-y-2">
-                  <p className="text-sm text-navy">
-                    إنشاء حساب دخول للمريض مع رمز QR للمسح المباشر.
-                  </p>
-                  <Button
-                    size="sm"
-                    className="bg-violet-600 hover:bg-violet-700"
-                    loading={loading}
-                    onClick={createAccount}
-                  >
-                    إنشاء حساب + QR
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  {patient.qrUrl && (
-                    <div className="flex justify-center sm:hidden">
-                      <PatientQrCode url={patient.qrUrl} size={120} />
+            {/* —— نظرة عامة —— */}
+            {tab === "overview" && (
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                  <dl className="grid gap-2 text-sm sm:grid-cols-2">
+                    <div>
+                      <dt className="text-xs text-muted">الهاتف</dt>
+                      <dd className="font-latin font-semibold text-navy">
+                        {toLatinDigits(patient.phone || "—")}
+                      </dd>
+                    </div>
+                    {patient.age != null && (
+                      <div>
+                        <dt className="text-xs text-muted">العمر</dt>
+                        <dd className="font-latin text-navy">
+                          {toLatinDigits(patient.age)}
+                        </dd>
+                      </div>
+                    )}
+                    {patient.city && (
+                      <div>
+                        <dt className="text-xs text-muted">المدينة</dt>
+                        <dd className="text-navy">{patient.city}</dd>
+                      </div>
+                    )}
+                    <div className="sm:col-span-2">
+                      <dt className="text-xs text-muted">الموعد القادم</dt>
+                      <dd className="font-semibold text-teal">
+                        {patient.nextLabel
+                          ? toLatinDigits(patient.nextLabel)
+                          : "غير محدد"}
+                      </dd>
+                    </div>
+                    {patient.allergies && (
+                      <div className="sm:col-span-2 rounded-xl bg-red-50 px-3 py-2 text-danger">
+                        حساسية: {patient.allergies}
+                      </div>
+                    )}
+                  </dl>
+
+                  {(patient.qrUrl || creds?.qrUrl) && (
+                    <div className="mx-auto flex flex-col items-center gap-1 sm:mx-0">
+                      <PatientQrCode
+                        url={(creds?.qrUrl || patient.qrUrl)!}
+                        size={112}
+                      />
+                      <Button size="sm" variant="outline" onClick={printQr}>
+                        طباعة QR
+                      </Button>
                     </div>
                   )}
-                  <FormField label="بريد / معرف الدخول">
-                    <Input
-                      className="font-latin"
-                      value={accountForm.email}
-                      onChange={(e) =>
-                        setAccountForm({
-                          ...accountForm,
-                          email: e.target.value,
-                        })
-                      }
-                    />
-                  </FormField>
-                  <FormField label="كلمة سر جديدة (اختياري)">
-                    <Input
-                      type="password"
-                      value={accountForm.newPassword}
-                      onChange={(e) =>
-                        setAccountForm({
-                          ...accountForm,
-                          newPassword: e.target.value,
-                        })
-                      }
-                    />
-                  </FormField>
-                  <div className="flex flex-wrap gap-2">
+                </div>
+
+                <div className="rounded-xl border border-border bg-[#F8FBFC] p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-bold text-muted">التكاليف</p>
+                    {finance && finance.payments.length > 0 ? (
+                      <button
+                        type="button"
+                        className="text-xs font-bold text-teal hover:underline"
+                        onClick={() => setShowPayments((v) => !v)}
+                      >
+                        {showPayments ? "إخفاء الدفعات" : "سجل الدفعات"}
+                      </button>
+                    ) : null}
+                  </div>
+                  {finance && (finance.totalBilled > 0 || finance.totalPaid > 0) ? (
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <p className="text-[10px] text-muted">الإجمالي</p>
+                        <p className="font-latin text-sm font-bold text-navy">
+                          {formatCurrencyDZD(finance.totalBilled)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted">مدفوع</p>
+                        <p className="font-latin text-sm font-bold text-teal">
+                          {formatCurrencyDZD(finance.totalPaid)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted">المتبقي</p>
+                        <p
+                          className={cn(
+                            "font-latin text-sm font-bold",
+                            finance.remaining > 0 ? "text-danger" : "text-navy",
+                          )}
+                        >
+                          {formatCurrencyDZD(finance.remaining)}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted">لا فواتير بعد</p>
+                  )}
+
+                  {showPayments && finance && finance.payments.length > 0 && (
+                    <ul className="mt-3 max-h-40 space-y-2 overflow-y-auto border-t border-border pt-3">
+                      {finance.payments.map((pay) => (
+                        <li
+                          key={pay.id}
+                          className="flex justify-between gap-2 text-sm"
+                        >
+                          <span className="text-muted">
+                            {toLatinDigits(pay.dateLabel)} · {pay.method}
+                          </span>
+                          <span className="font-latin font-bold text-teal">
+                            {formatCurrencyDZD(pay.amount)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {canManage && (
+                  <div className="flex flex-wrap gap-2 border-t border-border pt-3">
                     <Button
                       size="sm"
-                      className="bg-violet-600 hover:bg-violet-700"
-                      loading={loading}
-                      onClick={saveAccount}
+                      variant="teal"
+                      onClick={() => switchTab("schedule")}
                     >
-                      حفظ الحساب
+                      حجز / تعديل موعد
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={printQr}
-                      disabled={!patient.qrUrl}
+                      onClick={() => switchTab("account")}
                     >
-                      طباعة QR
+                      {patient.hasAccount ? "الحساب و QR" : "إنشاء حساب"}
                     </Button>
+                    <button
+                      type="button"
+                      className="mr-auto text-xs text-danger hover:underline"
+                      onClick={deletePatient}
+                    >
+                      حذف من قائمتي
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* —— موعد —— */}
+            {tab === "schedule" && canManage && (
+              <div className="space-y-3">
+                <p className="text-sm text-muted">
+                  اختر يوماً من أيام دوامك فقط — بدون ساعة
+                </p>
+                {availability && availability.workDays.length > 0 ? (
+                  <AppointmentDatePicker
+                    availability={availability}
+                    date={selectedDate || defaultDate}
+                    onDateChange={setSelectedDate}
+                    dayOnly
+                  />
+                ) : (
+                  <p className="text-sm text-danger">
+                    حدّد أيام عملك من الإعدادات أولاً
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    ["ORTHO_FOLLOWUP", "متابعة تقويم"],
+                    ["GENERAL_EXAM", "فحص"],
+                    ["POST_OP_FOLLOWUP", "بعد عملية"],
+                    ["OTHER", "أخرى"],
+                  ].map(([code, label]) => (
+                    <Button
+                      key={code}
+                      size="sm"
+                      variant={apptType === code ? "teal" : "outline"}
+                      onClick={() => setApptType(code)}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="teal"
+                    loading={loading}
+                    disabled={!availability?.workDays.length}
+                    onClick={() => saveSchedule(false)}
+                  >
+                    حجز لهذا اليوم
+                  </Button>
+                  {patient.nextAppointmentId && (
                     <Button
                       size="sm"
-                      variant="danger"
+                      variant="secondary"
                       loading={loading}
-                      onClick={deactivateAccount}
+                      disabled={!availability?.workDays.length}
+                      onClick={() => saveSchedule(true)}
                     >
-                      تعطيل الحساب
+                      تعديل يوم الموعد الحالي
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* —— حساب —— */}
+            {tab === "account" && canManage && (
+              <div className="space-y-3">
+                {creds && (
+                  <PrintCredentials
+                    patientName={patient.fullName}
+                    login={creds.login}
+                    password={creds.password}
+                    qrUrl={creds.qrUrl}
+                    nextLabel={patient.nextLabel}
+                    sessionsCount={patient.sessionsCount}
+                  />
+                )}
+
+                {!patient.hasAccount && !creds ? (
+                  <div className="space-y-2 rounded-xl border border-border bg-[#F8FBFC] p-4">
+                    <p className="text-sm text-navy">
+                      إنشاء حساب دخول مع رمز QR للمسح المباشر إلى لوحة المريض.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="teal"
+                      loading={loading}
+                      onClick={createAccount}
+                    >
+                      إنشاء حساب + QR
                     </Button>
                   </div>
-                </>
-              )}
-            </div>
-          )}
+                ) : (
+                  <>
+                    {(patient.qrUrl || creds?.qrUrl) && (
+                      <div className="flex flex-col items-center gap-2 sm:flex-row sm:items-start">
+                        <PatientQrCode
+                          url={(creds?.qrUrl || patient.qrUrl)!}
+                          size={132}
+                        />
+                        <div className="space-y-2 text-sm">
+                          <p className="font-semibold text-navy">
+                            الدخول:{" "}
+                            <span className="font-latin">
+                              {toLatinDigits(
+                                creds?.login ||
+                                  patient.accountLogin ||
+                                  patient.phone,
+                              )}
+                            </span>
+                          </p>
+                          <Button size="sm" variant="outline" onClick={printQr}>
+                            طباعة بطاقة QR
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    <FormField label="بريد / معرف الدخول">
+                      <Input
+                        className="font-latin"
+                        value={accountForm.email}
+                        onChange={(e) =>
+                          setAccountForm({
+                            ...accountForm,
+                            email: e.target.value,
+                          })
+                        }
+                      />
+                    </FormField>
+                    <FormField label="كلمة سر جديدة (اختياري)">
+                      <Input
+                        type="password"
+                        value={accountForm.newPassword}
+                        onChange={(e) =>
+                          setAccountForm({
+                            ...accountForm,
+                            newPassword: e.target.value,
+                          })
+                        }
+                      />
+                    </FormField>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="teal"
+                        loading={loading}
+                        onClick={saveAccount}
+                      >
+                        حفظ الحساب
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        loading={loading}
+                        onClick={deactivateAccount}
+                      >
+                        تعطيل الحساب
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
-          {error && <p className="text-sm font-semibold text-danger">{error}</p>}
-          {ok && <p className="text-sm font-semibold text-teal">{ok}</p>}
+            {/* —— تعديل بيانات —— */}
+            {tab === "edit" && canManage && (
+              <div className="space-y-2">
+                <FormField label="الاسم الكامل">
+                  <Input
+                    value={info.fullName}
+                    onChange={(e) =>
+                      setInfo({ ...info, fullName: e.target.value })
+                    }
+                  />
+                </FormField>
+                <FormField label="الهاتف">
+                  <Input
+                    className="font-latin"
+                    value={info.phone}
+                    onChange={(e) =>
+                      setInfo({ ...info, phone: e.target.value })
+                    }
+                  />
+                </FormField>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <FormField label="العمر">
+                    <Input
+                      className="font-latin"
+                      value={info.age}
+                      onChange={(e) =>
+                        setInfo({ ...info, age: e.target.value })
+                      }
+                    />
+                  </FormField>
+                  <FormField label="المدينة">
+                    <Input
+                      value={info.city}
+                      onChange={(e) =>
+                        setInfo({ ...info, city: e.target.value })
+                      }
+                    />
+                  </FormField>
+                </div>
+                <FormField label="البريد">
+                  <Input
+                    className="font-latin"
+                    value={info.email}
+                    onChange={(e) =>
+                      setInfo({ ...info, email: e.target.value })
+                    }
+                  />
+                </FormField>
+                <FormField label="حساسية">
+                  <Input
+                    value={info.allergies}
+                    onChange={(e) =>
+                      setInfo({ ...info, allergies: e.target.value })
+                    }
+                  />
+                </FormField>
+                <Button size="sm" variant="teal" loading={loading} onClick={saveInfo}>
+                  حفظ البيانات
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
