@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth/current-user";
 import {
   directPatientFromRequest,
   removePatientBeforeDoctor,
+  updateReceptionRequestInfo,
 } from "@/lib/services/appointments";
 
 export async function POST(
@@ -24,6 +25,49 @@ export async function POST(
   const action = body.action as string;
 
   try {
+    if (action === "update") {
+      const ageRaw = body.age;
+      let age: number | null | undefined = undefined;
+      if (ageRaw === "" || ageRaw === null) age = null;
+      else if (ageRaw !== undefined) {
+        const n = Number(ageRaw);
+        age = Number.isFinite(n) ? n : undefined;
+      }
+
+      const updated = await updateReceptionRequestInfo({
+        requestId: id,
+        userId: user.id,
+        roleCode: user.role.code,
+        userName: user.fullName,
+        fullName:
+          body.fullName !== undefined ? String(body.fullName) : undefined,
+        phone: body.phone !== undefined ? String(body.phone) : undefined,
+        age,
+        city: body.city !== undefined ? String(body.city) : undefined,
+        chronicIllnesses:
+          body.chronicIllnesses !== undefined
+            ? String(body.chronicIllnesses)
+            : undefined,
+        isFirstVisit:
+          body.isFirstVisit === undefined
+            ? undefined
+            : Boolean(body.isFirstVisit),
+      });
+
+      return NextResponse.json({
+        message: "تم حفظ بيانات المريض",
+        request: {
+          id: updated.id,
+          fullName: updated.fullName,
+          phone: updated.phone,
+          age: updated.age,
+          city: updated.city,
+          chronicIllnesses: updated.chronicIllnesses,
+          isPreviousPatient: updated.isPreviousPatient,
+        },
+      });
+    }
+
     if (action === "reject" || action === "remove") {
       await removePatientBeforeDoctor({
         requestId: id,

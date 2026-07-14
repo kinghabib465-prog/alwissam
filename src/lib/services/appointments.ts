@@ -110,6 +110,7 @@ export async function createAppointmentRequest(input: {
   dateOfBirth?: string;
   gender?: "MALE" | "FEMALE";
   city?: string;
+  chronicIllnesses?: string;
   reason?: string;
   appointmentType: AppointmentType;
   isEmergency?: boolean;
@@ -122,9 +123,20 @@ export async function createAppointmentRequest(input: {
   additionalNotes?: string;
   consentAccepted: boolean;
 }) {
-  const service = await prisma.service.findUnique({
+  let service = await prisma.service.findUnique({
     where: { code: input.appointmentType },
   });
+  if (!service && input.appointmentType === "LASER_WHITENING") {
+    service = await prisma.service.create({
+      data: {
+        code: "LASER_WHITENING",
+        nameAr: "تبييض الأسنان بالليزر",
+        category: "تجميل",
+        defaultDuration: 60,
+        isActive: true,
+      },
+    });
+  }
 
   const { ymd, start, end } = algiersDayBounds();
 
@@ -145,6 +157,7 @@ export async function createAppointmentRequest(input: {
         dateOfBirth: input.dateOfBirth ? new Date(input.dateOfBirth) : undefined,
         gender: input.gender,
         city: input.city,
+        chronicIllnesses: input.chronicIllnesses?.trim() || undefined,
         reason: input.reason?.trim() || service?.nameAr || "طلب موعد",
         appointmentType: input.appointmentType,
         serviceId: service?.id,
@@ -189,6 +202,113 @@ export async function createAppointmentRequest(input: {
   });
 
   return { ...request, queueNumber };
+}
+
+/** تحديث بيانات طلب الاستقبال قبل التوجيه */
+export async function updateReceptionRequestInfo(params: {
+  requestId: string;
+  userId: string;
+  roleCode: string;
+  userName: string;
+  fullName?: string;
+  phone?: string;
+  age?: number | null;
+  city?: string | null;
+  chronicIllnesses?: string | null;
+  isFirstVisit?: boolean;
+}) {
+  const existing = await prisma.appointmentRequest.findUnique({
+    where: { id: params.requestId },
+  });
+  if (!existing) throw new Error("الطلب غير موجود");
+  if (existing.appointmentId) {
+    throw new Error("تم توجيه هذا الطلب — عدّل ملف المريض من القائمة");
+  }
+  if (
+    !["NEW_REQUEST", "EMERGENCY", "UNDER_SECRETARY_REVIEW"].includes(
+      existing.status,
+    )
+  ) {
+    throw new Error("لا يمكن تعديل هذا الطلب الآن");
+  }
+
+  const fullName = params.fullName?.trim();
+  const phone = params.phone?.trim();
+  if (fullName !== undefined && fullName.length < 2) {
+    throw new Error("الاسم غير صالح");
+  }
+  if (phone !== undefined && phone.length > 0 && phone.length < 8) {
+    throw new Error("رقم الهاتف غير صالح");
+  }
+
+  const updated = await prisma.appointmentRequest.update({
+    where: { id: params.requestId },
+    data: {
+      fullName: fullName || existing.fullName,
+      phone: phone !== undefined ? phone : existing.phone,
+      age:
+        params.age === null
+          ? null
+          : params.age !== undefined
+            ? params.age
+            : existing.age,
+      city:
+        params.city === null
+          ? null
+          : params.city !== undefined
+            ? params.city.trim() || null
+            : existing.city,
+      chronicIllnesses:
+        params.chronicIllnesses === null
+          ? null
+          : params.chronicIllnesses !== undefined
+            ? params.chronicIllnesses.trim() || null
+            : existing.chronicIllnesses,
+      isPreviousPatient:
+        params.isFirstVisit !== undefined
+          ? !params.isFirstVisit
+          : existing.isPreviousPatient,
+      status:
+        existing.status === "NEW_REQUEST"
+          ? "UNDER_SECRETARY_REVIEW"
+          : existing.status,
+      statusHistory: {
+        create: {
+          previousStatus: existing.status,
+          newStatus:
+            existing.status === "NEW_REQUEST"
+              ? "UNDER_SECRETARY_REVIEW"
+              : existing.status,
+          changedById: params.userId,
+          reason: `تحديث بيانات الاستقبال بواسطة ${params.userName}`,
+        },
+      },
+    },
+  });
+
+  await createAuditLog({
+    userId: params.userId,
+    roleCode: params.roleCode,
+    action: "RECEPTION_REQUEST_UPDATED",
+    entityType: "AppointmentRequest",
+    entityId: params.requestId,
+    oldValue: {
+      fullName: existing.fullName,
+      phone: existing.phone,
+      city: existing.city,
+      chronicIllnesses: existing.chronicIllnesses,
+    },
+    newValue: {
+      fullName: updated.fullName,
+      phone: updated.phone,
+      city: updated.city,
+      chronicIllnesses: updated.chronicIllnesses,
+      isPreviousPatient: updated.isPreviousPatient,
+    },
+    reason: `تحديث بيانات الاستقبال بواسطة ${params.userName}`,
+  });
+
+  return updated;
 }
 
 export async function changeAppointmentRequestStatus(params: {
@@ -389,13 +509,20 @@ export async function directPatientFromRequest(params: {
         dateOfBirth: request.dateOfBirth ?? undefined,
         gender: request.gender ?? undefined,
         city: request.city ?? undefined,
+        chronicIllnesses: request.chronicIllnesses ?? undefined,
       },
     });
-  } else if (patient.fullName !== request.fullName) {
-    // حدّث الاسم إن تطابق الهاتف لمريض سابق
+  } else {
+    // حدّث بيانات الاستقبال إن توفّرت
     patient = await prisma.patient.update({
       where: { id: patient.id },
-      data: { fullName: request.fullName },
+      data: {
+        fullName: request.fullName || patient.fullName,
+        age: request.age ?? patient.age,
+        city: request.city?.trim() || patient.city,
+        chronicIllnesses:
+          request.chronicIllnesses?.trim() || patient.chronicIllnesses,
+      },
     });
   }
 

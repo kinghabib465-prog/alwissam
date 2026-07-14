@@ -33,6 +33,7 @@ export const bookAppointmentSchema = z.object({
     "SURGERY_CONSULT",
     "SURGERY",
     "POST_OP_FOLLOWUP",
+    "LASER_WHITENING",
     "OTHER",
   ]),
   isEmergency: z.boolean().default(false),
@@ -43,6 +44,7 @@ export const bookAppointmentSchema = z.object({
   hasOrthodontics: z.boolean().default(false),
   previousSurgery: z.boolean().default(false),
   additionalNotes: z.string().optional(),
+  chronicIllnesses: z.string().max(500).optional(),
   consentAccepted: z.boolean().refine((v) => v === true, {
     message: "يجب الموافقة على الشروط",
   }),

@@ -19,8 +19,11 @@ export async function POST(req: NextRequest) {
   const phone = String(body.phone || "").trim();
   const ageRaw = body.age;
   const city = String(body.city || "").trim();
+  const chronicIllnesses = String(body.chronicIllnesses || "").trim();
   const reason = String(body.reason || "").trim();
   const typeRaw = String(body.appointmentType || "GENERAL_EXAM");
+  const isFirstVisit =
+    body.isFirstVisit === undefined ? true : Boolean(body.isFirstVisit);
 
   if (!fullName) {
     return NextResponse.json({ error: "الاسم مطلوب" }, { status: 400 });
@@ -47,8 +50,10 @@ export async function POST(req: NextRequest) {
     phone,
     age: Number.isFinite(age) ? age : undefined,
     city: city || undefined,
+    chronicIllnesses: chronicIllnesses || undefined,
     reason: reason || "تسجيل عند الوصول — السكرتارية",
     appointmentType,
+    isPreviousPatient: !isFirstVisit,
     consentAccepted: true,
     additionalNotes: `سجّله السكرتير ${user.fullName}`,
   });

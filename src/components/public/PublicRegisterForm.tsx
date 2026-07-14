@@ -19,6 +19,7 @@ const visitReasons = [
   { value: "SURGERY_CONSULT", label: "استشارة جراحية" },
   { value: "SURGERY", label: "عملية" },
   { value: "POST_OP_FOLLOWUP", label: "متابعة بعد العملية" },
+  { value: "LASER_WHITENING", label: "تبييض الأسنان بالليزر" },
   { value: "OTHER", label: "أخرى" },
 ] as const;
 

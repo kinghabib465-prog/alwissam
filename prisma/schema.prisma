@@ -53,6 +53,7 @@ enum AppointmentType {
   SURGERY_CONSULT
   SURGERY
   POST_OP_FOLLOWUP
+  LASER_WHITENING
   OTHER
 }
 
@@ -457,6 +458,7 @@ model AppointmentRequest {
   dateOfBirth        DateTime?
   gender             Gender?
   city               String?
+  chronicIllnesses   String?
   reason             String
   serviceId          String?
   service            Service?          @relation(fields: [serviceId], references: [id])

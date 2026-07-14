@@ -64,6 +64,7 @@ export const appointmentTypeAr: Record<string, string> = {
   SURGERY_CONSULT: "استشارة جراحية",
   SURGERY: "عملية",
   POST_OP_FOLLOWUP: "متابعة بعد العملية",
+  LASER_WHITENING: "تبييض الأسنان بالليزر",
   OTHER: "أخرى",
 };
 

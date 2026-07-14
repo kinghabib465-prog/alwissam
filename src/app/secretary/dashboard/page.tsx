@@ -65,7 +65,7 @@ export default async function SecretaryDashboardPage() {
       <SecretaryAutoRefresh seconds={5} />
       <TopHeader
         title={`استقبال — ${user.fullName}`}
-        subtitle="تسجيل عند المدخل · التوجيه"
+        subtitle="طلبات التسجيل من الموقع والمدخل — عدّلي البيانات ثم وجّهي للطبيب"
       />
 
       {todayApptCount > 0 && (
@@ -99,6 +99,10 @@ export default async function SecretaryDashboardPage() {
                 phone={req.phone}
                 age={req.age}
                 city={req.city}
+                chronicIllnesses={req.chronicIllnesses}
+                isPreviousPatient={req.isPreviousPatient}
+                appointmentType={req.appointmentType}
+                reason={req.reason}
                 queueOrder={index + 1}
                 doctors={doctorOpts}
                 csrfToken={user.csrfToken}

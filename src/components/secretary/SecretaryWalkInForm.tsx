@@ -3,9 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Form";
+import { FormField, Input } from "@/components/ui/Form";
 
-/** تسجيل عند المدخل — الاسم · الهاتف · العمر · المدينة */
+/** تسجيل عند المدخل — الاسم · الهاتف · العمر · السكن · المرض · أول زيارة */
 export function SecretaryWalkInForm({ csrfToken }: { csrfToken: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -16,6 +16,8 @@ export function SecretaryWalkInForm({ csrfToken }: { csrfToken: string }) {
     phone: "",
     age: "",
     city: "",
+    chronicIllnesses: "",
+    isFirstVisit: true,
   });
 
   async function onSubmit(e: React.FormEvent) {
@@ -33,6 +35,8 @@ export function SecretaryWalkInForm({ csrfToken }: { csrfToken: string }) {
         phone: form.phone,
         age: form.age ? Number(form.age) : undefined,
         city: form.city || undefined,
+        chronicIllnesses: form.chronicIllnesses || undefined,
+        isFirstVisit: form.isFirstVisit,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -41,7 +45,14 @@ export function SecretaryWalkInForm({ csrfToken }: { csrfToken: string }) {
       setError(data.error || "فشل التسجيل");
       return;
     }
-    setForm({ fullName: "", phone: "", age: "", city: "" });
+    setForm({
+      fullName: "",
+      phone: "",
+      age: "",
+      city: "",
+      chronicIllnesses: "",
+      isFirstVisit: true,
+    });
     setOpen(false);
     router.refresh();
   }
@@ -64,34 +75,58 @@ export function SecretaryWalkInForm({ csrfToken }: { csrfToken: string }) {
       onSubmit={onSubmit}
       className="card-surface mb-4 space-y-3 border-teal/30 p-4"
     >
-      <Input
-        value={form.fullName}
-        onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-        placeholder="الاسم واللقب"
-        required
-      />
-      <Input
-        className="font-latin"
-        value={form.phone}
-        onChange={(e) => setForm({ ...form, phone: e.target.value })}
-        placeholder="رقم الهاتف"
-        required
-        minLength={8}
-      />
-      <div className="grid gap-3 sm:grid-cols-2">
+      <FormField label="الاسم واللقب">
+        <Input
+          value={form.fullName}
+          onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+          required
+        />
+      </FormField>
+      <FormField label="رقم الهاتف">
         <Input
           className="font-latin"
-          type="number"
-          value={form.age}
-          onChange={(e) => setForm({ ...form, age: e.target.value })}
-          placeholder="العمر"
+          value={form.phone}
+          onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          required
+          minLength={8}
         />
-        <Input
-          value={form.city}
-          onChange={(e) => setForm({ ...form, city: e.target.value })}
-          placeholder="المدينة"
-        />
+      </FormField>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <FormField label="العمر">
+          <Input
+            className="font-latin"
+            type="number"
+            value={form.age}
+            onChange={(e) => setForm({ ...form, age: e.target.value })}
+          />
+        </FormField>
+        <FormField label="السكن">
+          <Input
+            value={form.city}
+            onChange={(e) => setForm({ ...form, city: e.target.value })}
+            placeholder="المدينة / البلدية"
+          />
+        </FormField>
       </div>
+      <FormField label="مرض تعاني منه">
+        <Input
+          value={form.chronicIllnesses}
+          onChange={(e) =>
+            setForm({ ...form, chronicIllnesses: e.target.value })
+          }
+          placeholder="مثال: سكري، ضغط… أو لا يوجد"
+        />
+      </FormField>
+      <label className="flex items-center gap-2 text-sm font-semibold text-navy">
+        <input
+          type="checkbox"
+          checked={form.isFirstVisit}
+          onChange={(e) =>
+            setForm({ ...form, isFirstVisit: e.target.checked })
+          }
+        />
+        أول زيارة للعيادة
+      </label>
       {error && <p className="text-sm text-danger">{error}</p>}
       <div className="flex flex-wrap gap-2">
         <Button type="submit" loading={loading} variant="teal">

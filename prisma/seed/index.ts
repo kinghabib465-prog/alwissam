@@ -139,6 +139,7 @@ async function main() {
     { code: "SURGERY_CONSULT", nameAr: "استشارة جراحية", category: "جراحة", defaultDuration: 45 },
     { code: "SURGERY", nameAr: "عملية", category: "جراحة", defaultDuration: 90 },
     { code: "POST_OP_FOLLOWUP", nameAr: "متابعة بعد العملية", category: "جراحة", defaultDuration: 30 },
+    { code: "LASER_WHITENING", nameAr: "تبييض الأسنان بالليزر", category: "تجميل", defaultDuration: 60 },
     { code: "OTHER", nameAr: "أخرى", category: "عام", defaultDuration: 30 },
   ];
 
