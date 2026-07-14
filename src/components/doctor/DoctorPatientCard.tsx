@@ -70,16 +70,23 @@ export function DoctorPatientCard({
   csrfToken,
   canManage,
   availability,
+  expanded,
+  onExpandedChange,
 }: {
   patient: PatientRowData;
   csrfToken: string;
   canManage?: boolean;
   availability?: DoctorAvailability | null;
   generalAvailability?: DoctorAvailability | null;
+  /** فتح مراقب من القائمة — مريض واحد فقط لتقليل التشويش */
+  expanded?: boolean;
+  onExpandedChange?: (open: boolean) => void;
 }) {
   const router = useRouter();
   const { firstName, lastName } = splitPatientName(patient.fullName);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = expanded ?? internalOpen;
+  const setOpen = onExpandedChange ?? setInternalOpen;
   const [tab, setTab] = useState<TabKey>("overview");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -118,6 +125,14 @@ export function DoctorPatientCard({
     setTab("overview");
     setError("");
     setOk("");
+  }
+
+  function togglePanel() {
+    if (open) {
+      setOpen(false);
+    } else {
+      openManage();
+    }
   }
 
   function switchTab(next: TabKey) {
@@ -294,7 +309,7 @@ export function DoctorPatientCard({
       <button
         type="button"
         className="flex w-full items-center gap-3 px-4 py-3.5 text-right transition hover:bg-[#F8FBFC]"
-        onClick={() => (open ? setOpen(false) : openManage())}
+        onClick={togglePanel}
         aria-expanded={open}
       >
         <div className="min-w-0 flex-1">

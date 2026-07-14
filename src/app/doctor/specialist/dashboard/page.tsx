@@ -38,7 +38,7 @@ export default async function SpecialistDoctorDashboardPage() {
     <DashboardShell items={navDoctorSpecialistAr as never} userName={user.fullName}>
       <TopHeader
         title="المعاينة"
-        subtitle="المرضى الموجَّهون — يمكن توجيه الحالة العادية للطبيب العام مع موعد"
+        subtitle="يوم العمل — المرضى في الانتظار أو قيد الجلسة الآن"
       />
       <Card>
         {waiting.length === 0 ? (

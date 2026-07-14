@@ -4,6 +4,7 @@ import { DashboardShell, TopHeader } from "@/components/layout/DashboardShell";
 import { EmptyState } from "@/components/ui/Card";
 import { navDoctorSpecialistAr } from "@/i18n/ar";
 import { DoctorPatientsList } from "@/components/doctor/DoctorPatientsList";
+import { ClinicWorkflowGuide } from "@/components/doctor/ClinicWorkflowGuide";
 import { loadDoctorPatients } from "@/lib/doctor-patients";
 import { loadDoctorAvailability } from "@/lib/doctor-availability.server";
 
@@ -29,8 +30,9 @@ export default async function SpecialistPatientsPage() {
     <DashboardShell items={navDoctorSpecialistAr as never} userName={user.fullName}>
       <TopHeader
         title="مرضاي"
-        subtitle="موعد اليوم · قادم · بدون موعد — اضغط المريض للتفاصيل"
+        subtitle="ملف المرضى — حجز · حساب · بيانات (ليس طابور اليوم)"
       />
+      <ClinicWorkflowGuide variant="patients" />
       <div className="card-surface p-4 sm:p-5">
         {patients.length === 0 ? (
           <EmptyState title="لا مرضى بعد المعاينة" />

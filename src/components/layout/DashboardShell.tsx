@@ -108,6 +108,7 @@ function NavGroup({ item }: { item: SidebarItem }) {
   const underGroup = children.some(
     (c) => pathname === c.href || pathname.startsWith(`${c.href}/`),
   );
+  // يبقى مفتوحاً أثناء التنقّل داخل المجموعة (مثل الإعدادات ويوم العمل)
   const [open, setOpen] = useState(underGroup);
   const Icon = ICONS[item.icon] || Settings;
 
