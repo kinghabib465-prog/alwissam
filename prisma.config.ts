@@ -7,7 +7,8 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
-    // Prisma 7: seed must live here (package.json prisma.seed is ignored)
+    // Prisma 7: seed must live here (package.json prisma.seed is ignored).
+    // On Render prefer Start without `db seed` — staff bootstrap runs in instrumentation.
     seed: "node ./scripts/ensure-staff.mjs",
   },
   datasource: {

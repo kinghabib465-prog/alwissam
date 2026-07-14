@@ -5,6 +5,7 @@ services:
     plan: free
     branch: main
     buildCommand: npm install && npm run build
+    # لا تستخدم prisma db seed هنا — يوقف التشغيل عند أي خطأ؛ staff عبر instrumentation
     preDeployCommand: npx prisma migrate deploy
     startCommand: npx prisma migrate deploy && next start -H 0.0.0.0 -p $PORT
     autoDeploy: true

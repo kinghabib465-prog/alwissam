@@ -6,7 +6,8 @@ import { PrismaClient, RoleCode, DoctorType, DayOfWeek } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
 import bcrypt from "bcryptjs";
-import { pathToFileURL } from "node:url";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const { Pool } = pg;
 
@@ -56,6 +57,82 @@ async function upsertRole(prisma, code, nameAr) {
   });
 }
 
+/** هاتف فريد: إن كان لغير هذا المستخدم نتجنب التعارض */
+async function resolveUniquePhone(prisma, email, desiredPhone) {
+  if (!desiredPhone) return null;
+  const owner = await prisma.user.findUnique({
+    where: { phone: desiredPhone },
+    select: { id: true, email: true },
+  });
+  if (!owner) return desiredPhone;
+  if (owner.email === email) return desiredPhone;
+  console.warn(
+    `[ensure-staff] phone ${desiredPhone} already used by ${owner.email}; keeping existing phone for ${email}`,
+  );
+  return undefined; // لا تفرض تغييراً على التحديث
+}
+
+async function upsertStaffUser(prisma, {
+  email,
+  phone,
+  fullName,
+  passwordHash,
+  roleId,
+}) {
+  const safePhone = await resolveUniquePhone(prisma, email, phone);
+  const existing = await prisma.user.findUnique({ where: { email } });
+
+  if (existing) {
+    return prisma.user.update({
+      where: { email },
+      data: {
+        fullName,
+        ...(safePhone !== undefined ? { phone: safePhone } : {}),
+        passwordHash,
+        roleId,
+        status: "ACTIVE",
+        deletedAt: null,
+        failedLoginCount: 0,
+        lockedUntil: null,
+      },
+    });
+  }
+
+  // إنشاء: إن كان الهاتف محجوزاً استخدم هاتفاً فريداً مؤقتاً
+  let createPhone = safePhone;
+  if (createPhone === undefined) {
+    createPhone = `seed-${email.split("@")[0]}-${Date.now().toString().slice(-6)}`;
+  }
+
+  try {
+    return await prisma.user.create({
+      data: {
+        email,
+        phone: createPhone,
+        fullName,
+        passwordHash,
+        roleId,
+        status: "ACTIVE",
+      },
+    });
+  } catch (err) {
+    // إعادة محاولة بدون هاتف مخصص إن فشل unique
+    if (err?.code === "P2002") {
+      return prisma.user.create({
+        data: {
+          email,
+          phone: `seed-${Date.now().toString().slice(-8)}`,
+          fullName,
+          passwordHash,
+          roleId,
+          status: "ACTIVE",
+        },
+      });
+    }
+    throw err;
+  }
+}
+
 export async function ensureStaff() {
   console.log("[ensure-staff] Starting staff bootstrap...");
   const { prisma, pool } = createPrisma();
@@ -81,26 +158,12 @@ export async function ensureStaff() {
       env("SEED_SECRETARY1_PASSWORD"),
       12,
     );
-    const secretaryUser = await prisma.user.upsert({
-      where: { email: env("SEED_SECRETARY1_EMAIL") },
-      update: {
-        fullName: "سمار بدر الدين",
-        phone: env("SEED_SECRETARY1_PHONE"),
-        passwordHash: secretaryPassword,
-        roleId: roles.SECRETARY.id,
-        status: "ACTIVE",
-        deletedAt: null,
-        failedLoginCount: 0,
-        lockedUntil: null,
-      },
-      create: {
-        email: env("SEED_SECRETARY1_EMAIL"),
-        phone: env("SEED_SECRETARY1_PHONE"),
-        fullName: "سمار بدر الدين",
-        passwordHash: secretaryPassword,
-        roleId: roles.SECRETARY.id,
-        status: "ACTIVE",
-      },
+    const secretaryUser = await upsertStaffUser(prisma, {
+      email: env("SEED_SECRETARY1_EMAIL"),
+      phone: env("SEED_SECRETARY1_PHONE"),
+      fullName: "سمار بدر الدين",
+      passwordHash: secretaryPassword,
+      roleId: roles.SECRETARY.id,
     });
 
     await prisma.secretaryProfile.upsert({
@@ -124,26 +187,12 @@ export async function ensureStaff() {
       env("SEED_DOCTOR_SPECIALIST_PASSWORD"),
       12,
     );
-    const specialistUser = await prisma.user.upsert({
-      where: { email: env("SEED_DOCTOR_SPECIALIST_EMAIL") },
-      update: {
-        fullName: "الدكتور منانة فؤاد",
-        phone: env("SEED_DOCTOR_SPECIALIST_PHONE"),
-        passwordHash: ownerPassword,
-        roleId: roles.ADMIN.id,
-        status: "ACTIVE",
-        deletedAt: null,
-        failedLoginCount: 0,
-        lockedUntil: null,
-      },
-      create: {
-        email: env("SEED_DOCTOR_SPECIALIST_EMAIL"),
-        phone: env("SEED_DOCTOR_SPECIALIST_PHONE"),
-        fullName: "الدكتور منانة فؤاد",
-        passwordHash: ownerPassword,
-        roleId: roles.ADMIN.id,
-        status: "ACTIVE",
-      },
+    const specialistUser = await upsertStaffUser(prisma, {
+      email: env("SEED_DOCTOR_SPECIALIST_EMAIL"),
+      phone: env("SEED_DOCTOR_SPECIALIST_PHONE"),
+      fullName: "الدكتور منانة فؤاد",
+      passwordHash: ownerPassword,
+      roleId: roles.ADMIN.id,
     });
 
     const specialist = await prisma.doctor.upsert({
@@ -165,26 +214,12 @@ export async function ensureStaff() {
       env("SEED_DOCTOR_GENERAL_PASSWORD"),
       12,
     );
-    const generalUser = await prisma.user.upsert({
-      where: { email: env("SEED_DOCTOR_GENERAL_EMAIL") },
-      update: {
-        fullName: "الدكتور قعري أسامة",
-        phone: env("SEED_DOCTOR_GENERAL_PHONE"),
-        passwordHash: generalPassword,
-        roleId: roles.DOCTOR_GENERAL.id,
-        status: "ACTIVE",
-        deletedAt: null,
-        failedLoginCount: 0,
-        lockedUntil: null,
-      },
-      create: {
-        email: env("SEED_DOCTOR_GENERAL_EMAIL"),
-        phone: env("SEED_DOCTOR_GENERAL_PHONE"),
-        fullName: "الدكتور قعري أسامة",
-        passwordHash: generalPassword,
-        roleId: roles.DOCTOR_GENERAL.id,
-        status: "ACTIVE",
-      },
+    const generalUser = await upsertStaffUser(prisma, {
+      email: env("SEED_DOCTOR_GENERAL_EMAIL"),
+      phone: env("SEED_DOCTOR_GENERAL_PHONE"),
+      fullName: "الدكتور قعري أسامة",
+      passwordHash: generalPassword,
+      roleId: roles.DOCTOR_GENERAL.id,
     });
 
     await prisma.doctor.upsert({
@@ -221,8 +256,10 @@ export async function ensureStaff() {
           ...prevClinic,
           nameAr: prevClinic.nameAr || "عيادة الوسام لطب الأسنان",
           phone: prevClinic.phone || process.env.CLINIC_PHONE || "0550000000",
-          email: prevClinic.email || process.env.CLINIC_EMAIL || "contact@alwisam.dz",
-          address: prevClinic.address || process.env.CLINIC_ADDRESS || "الجزائر",
+          email:
+            prevClinic.email || process.env.CLINIC_EMAIL || "contact@alwisam.dz",
+          address:
+            prevClinic.address || process.env.CLINIC_ADDRESS || "الجزائر",
           mapsLink: prevClinic.mapsLink || clinicMapsUrl,
           mapsEmbedUrl:
             prevClinic.mapsEmbedUrl ||
@@ -242,6 +279,28 @@ export async function ensureStaff() {
         },
       },
     });
+
+    // خدمة تبييض الليزر (إن وُجدت الهجرة)
+    try {
+      await prisma.service.upsert({
+        where: { code: "LASER_WHITENING" },
+        update: {
+          nameAr: "تبييض الأسنان بالليزر",
+          category: "تجميل",
+          defaultDuration: 60,
+          isActive: true,
+        },
+        create: {
+          code: "LASER_WHITENING",
+          nameAr: "تبييض الأسنان بالليزر",
+          category: "تجميل",
+          defaultDuration: 60,
+          isActive: true,
+        },
+      });
+    } catch (err) {
+      console.warn("[ensure-staff] LASER_WHITENING service skipped:", err?.message);
+    }
 
     for (const day of [
       DayOfWeek.SUNDAY,
@@ -274,13 +333,32 @@ export async function ensureStaff() {
   }
 }
 
-const isDirectRun =
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(process.argv[1]).href;
+function isMainModule() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    const thisFile = fileURLToPath(import.meta.url);
+    const invoked = path.resolve(entry);
+    if (thisFile === invoked) return true;
+    // مقارنة بـ file URL — بعض بيئات Prisma تمرّر مساراً نسبياً
+    return import.meta.url === pathToFileURL(invoked).href;
+  } catch {
+    return String(entry).includes("ensure-staff");
+  }
+}
 
-if (isDirectRun) {
-  ensureStaff().catch((err) => {
-    console.error("[ensure-staff] FAILED:", err);
-    process.exit(1);
-  });
+if (isMainModule()) {
+  ensureStaff()
+    .then(() => {
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error("[ensure-staff] FAILED:", err);
+      // على Render: لا تُسقط التشغيل إن فشل seed — instrumentation يعيد المحاولة
+      const soft =
+        process.env.SEED_SOFT_FAIL === "1" ||
+        process.env.RENDER === "true" ||
+        !!process.env.RENDER_SERVICE_ID;
+      process.exit(soft ? 0 : 1);
+    });
 }
