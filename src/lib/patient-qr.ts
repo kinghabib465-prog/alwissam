@@ -1,4 +1,5 @@
 import { randomBytes } from "crypto";
+import type { NextRequest } from "next/server";
 
 export function generateQrAccessToken() {
   return randomBytes(24).toString("hex");
@@ -35,11 +36,43 @@ export function getAppOrigin(hint?: string | null) {
     return `https://${cleaned}`;
   }
 
-  // Dev fallback only
   const envLocal = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
   if (envLocal) return envLocal;
   if (hint && !isLocalHost(hint)) return hint.replace(/\/$/, "");
   return "http://localhost:3000";
+}
+
+/** Origin the browser should see (avoids Render internal localhost:10000). */
+export function resolveRequestOrigin(req: NextRequest) {
+  const protoHeader = req.headers.get("x-forwarded-proto");
+  const hostHeader =
+    req.headers.get("x-forwarded-host") || req.headers.get("host");
+  const proto = protoHeader?.split(",")[0]?.trim();
+  const host = hostHeader?.split(",")[0]?.trim();
+
+  let forwarded: string | null = null;
+  if (proto && host && !isLocalHost(host)) {
+    forwarded = `${proto}://${host}`;
+  } else if (host && !isLocalHost(host)) {
+    forwarded = `https://${host}`;
+  }
+
+  try {
+    const fromUrl = new URL(req.url).origin;
+    if (!isLocalHost(fromUrl)) {
+      return getAppOrigin(forwarded || fromUrl);
+    }
+  } catch {
+    // ignore
+  }
+
+  return getAppOrigin(forwarded);
+}
+
+export function publicAppUrl(pathname: string, req?: NextRequest) {
+  const origin = req ? resolveRequestOrigin(req) : getAppOrigin();
+  const path = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  return `${origin}${path}`;
 }
 
 export function patientQrLoginUrl(token: string, origin?: string | null) {
