@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Cairo, Inter } from "next/font/google";
 import { ForceLatinDigits } from "@/components/system/ForceLatinDigits";
+import { getRequestLocale } from "@/i18n/get-locale";
+import { localeDir, localeHtmlLang } from "@/i18n/messages";
 import "./globals.css";
 
 const cairo = Cairo({
@@ -26,15 +28,19 @@ export const metadata: Metadata = {
     "منصة إدارة عيادة الوسام لطب الأسنان — مواعيد، ملفات طبية، تقويم، جراحة ومدفوعات",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getRequestLocale();
+  const dir = localeDir(locale);
+  const lang = localeHtmlLang(locale);
+
   return (
     <html
-      lang="ar-DZ-u-nu-latn"
-      dir="rtl"
+      lang={lang}
+      dir={dir}
       className={`${cairo.variable} ${inter.variable} h-full`}
     >
       <body className="min-h-full antialiased">

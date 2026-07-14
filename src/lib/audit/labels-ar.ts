@@ -27,6 +27,8 @@ export const auditActionLabelsAr: Record<string, string> = {
   EXAM_STARTED: "بدء معاينة",
   EXAM_COMPLETED_CHARGE: "إنهاء معاينة وإرسال مبلغ",
   DOCTOR_CHARGE_COLLECTED: "استلام مبلغ المعاينة",
+  STAFF_CHAT_TEXT: "رسالة طاقم نصية",
+  STAFF_CHAT_VOICE: "رسالة طاقم صوتية",
 };
 
 export function auditActionLabel(action: string) {

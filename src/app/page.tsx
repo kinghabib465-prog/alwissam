@@ -3,12 +3,14 @@ import { PublicFooter, PublicHeader } from "@/components/public/PublicChrome";
 import { PublicRegisterForm } from "@/components/public/PublicRegisterForm";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { getPublicT } from "@/i18n/get-locale";
 import { loadPublicPagesContent } from "@/lib/public-pages";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const content = await loadPublicPagesContent();
+  const { t } = await getPublicT();
 
   return (
     <div className="min-h-screen bg-background">
@@ -17,14 +19,12 @@ export default async function HomePage() {
         <div className="dashboard-gradient absolute inset-0 opacity-95" />
         <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:py-24">
           <div className="max-w-2xl text-white">
-            <p className="text-sm font-semibold text-soft-teal">
-              عيادة الوسام لطب الأسنان
-            </p>
+            <p className="text-sm font-semibold text-soft-teal">{t.brand}</p>
             <h1 className="mt-3 text-4xl font-bold leading-tight sm:text-5xl">
-              ابتسامتك تستحق الأفضل
+              {t.heroTitle}
             </h1>
             <p className="mt-4 max-w-xl text-base text-white/85">
-              سجّل عند الوصول وانتظر توجيه السكرتارية للطبيب المناسب.
+              {t.heroSubtitle}
             </p>
             <div className="mt-8">
               <a href="#register">
@@ -32,7 +32,7 @@ export default async function HomePage() {
                   size="lg"
                   className="bg-white text-navy hover:bg-soft-teal"
                 >
-                  سجّل الآن
+                  {t.heroCta}
                 </Button>
               </a>
             </div>

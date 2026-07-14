@@ -995,11 +995,15 @@ model Message {
   patientId  String?
   patient    Patient? @relation("PatientMessages", fields: [patientId], references: [id])
   subject    String?
+  /// TEXT | VOICE
+  kind       String   @default("TEXT")
   body       String
+  audioUrl   String?
   readAt     DateTime?
   createdAt  DateTime @default(now())
 
   @@index([receiverId])
+  @@index([senderId, createdAt])
   @@index([patientId])
 }
 

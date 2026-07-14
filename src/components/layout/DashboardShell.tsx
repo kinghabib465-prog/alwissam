@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { ClinicLogo } from "@/components/branding/ClinicLogo";
 import { cn } from "@/lib/utils";
+import { StaffChatWidget } from "@/components/staff/StaffChatWidget";
 
 const ICONS = {
   LayoutDashboard,
@@ -231,6 +232,7 @@ export function DashboardShell({
       <main className="lg:pr-64">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">{children}</div>
       </main>
+      <StaffChatWidget />
     </div>
   );
 }
