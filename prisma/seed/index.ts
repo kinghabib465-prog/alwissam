@@ -10,12 +10,39 @@ import { Pool } from "pg";
 import { hashPassword } from "../../src/lib/auth/password";
 import { PERMISSIONS } from "../../src/lib/auth/permissions";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error("DATABASE_URL is not set");
+}
+
+const isLocalDb = /localhost|127\.0\.0\.1|@postgres:/.test(connectionString);
+const pool = new Pool({
+  connectionString,
+  ssl:
+    process.env.DATABASE_SSL === "false" || isLocalDb
+      ? undefined
+      : {
+          rejectUnauthorized:
+            process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "true",
+        },
+});
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
+const SEED_DEFAULTS: Record<string, string> = {
+  SEED_SECRETARY1_EMAIL: "samar@alwisam.dz",
+  SEED_SECRETARY1_PHONE: "0550000002",
+  SEED_SECRETARY1_PASSWORD: "ChangeMe_Secretary_123!",
+  SEED_DOCTOR_SPECIALIST_EMAIL: "manana@alwisam.dz",
+  SEED_DOCTOR_SPECIALIST_PHONE: "0550000003",
+  SEED_DOCTOR_SPECIALIST_PASSWORD: "ChangeMe_Doctor_123!",
+  SEED_DOCTOR_GENERAL_EMAIL: "wakri@alwisam.dz",
+  SEED_DOCTOR_GENERAL_PHONE: "0550000004",
+  SEED_DOCTOR_GENERAL_PASSWORD: "ChangeMe_Doctor_123!",
+};
+
 function requireEnv(name: string) {
-  const value = process.env[name];
+  const value = process.env[name] || SEED_DEFAULTS[name];
   if (!value) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
