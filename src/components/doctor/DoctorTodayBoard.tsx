@@ -3,9 +3,13 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { StatusBadge } from "@/components/ui/Card";
-import { cn, formatTime } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { toLatinDigits } from "@/lib/latin-digits";
 import { splitPatientName } from "@/lib/patient-name";
+import {
+  periodFromStartAt,
+  SHIFT_LABEL_AR,
+} from "@/lib/doctor-availability";
 
 export type TodayAptView = {
   id: string;
@@ -79,12 +83,16 @@ function PatientRow({
               <span className="mr-2 font-semibold text-teal">{lastName}</span>
             ) : null}
           </p>
-          <p className="font-latin mt-0.5 text-xs text-muted">
-            {toLatinDigits(formatTime(new Date(apt.startAtIso)))}
+          <p className="mt-0.5 text-xs text-muted">
+            <span className="font-bold text-teal">
+              {SHIFT_LABEL_AR[periodFromStartAt(apt.startAtIso)]}
+            </span>
             {" · "}
             {apt.typeLabel}
             {" · "}
-            {toLatinDigits(apt.phone || "—")}
+            <span className="font-latin">
+              {toLatinDigits(apt.phone || "—")}
+            </span>
           </p>
         </div>
       </div>

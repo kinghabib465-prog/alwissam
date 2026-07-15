@@ -25,6 +25,7 @@ export function formatTime(date: Date | string) {
   return toLatinDigits(
     new Intl.DateTimeFormat("en-GB", {
       ...LATN,
+      timeZone: "Africa/Algiers",
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,

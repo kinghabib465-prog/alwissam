@@ -10,7 +10,8 @@ import { PrintCredentials } from "@/components/patient/PrintCredentials";
 import { PatientQrCode } from "@/components/patient/PatientQrCode";
 import { toLatinDigits } from "@/lib/latin-digits";
 import type { DoctorAvailability } from "@/lib/doctor-availability";
-import { nextWorkingYmd } from "@/lib/doctor-availability";
+import { nextWorkingYmd, type WorkShift } from "@/lib/doctor-availability";
+import { shiftsForDate } from "@/lib/doctor-availability";
 import { AppointmentDatePicker } from "@/components/doctor/AppointmentDatePicker";
 import { patientQrLoginUrl } from "@/lib/patient-qr";
 import { formatCurrencyDZD } from "@/lib/utils";
@@ -121,6 +122,7 @@ export function DoctorPatientCard({
   }, [availability]);
 
   const [selectedDate, setSelectedDate] = useState(defaultDate);
+  const [selectedShift, setSelectedShift] = useState<WorkShift>("MORNING");
   const finance = patient.finance;
 
   function openManage() {
@@ -170,13 +172,25 @@ export function DoctorPatientCard({
       setError("اختر يوم موعد من أيام عملك");
       return;
     }
+    if (availability) {
+      const shifts = shiftsForDate(selectedDate, availability.windowsByDay);
+      if (shifts.length > 0 && !shifts.includes(selectedShift)) {
+        setError("اختر فترة متاحة (صباح أو مساء)");
+        return;
+      }
+    }
     const body =
       editExisting && patient.nextAppointmentId
-        ? { appointmentId: patient.nextAppointmentId, date: selectedDate }
+        ? {
+            appointmentId: patient.nextAppointmentId,
+            date: selectedDate,
+            shift: selectedShift,
+          }
         : {
             patientId: patient.id,
             date: selectedDate,
             appointmentType: apptType,
+            shift: selectedShift,
           };
 
     const data = await api(
@@ -185,7 +199,11 @@ export function DoctorPatientCard({
       body,
     );
     if (!data) return;
-    setOk(editExisting ? "تم تعديل يوم الموعد" : "تم حجز الموعد");
+    setOk(
+      editExisting
+        ? "تم تعديل يوم/فترة الموعد"
+        : `تم حجز الموعد (${selectedShift === "EVENING" ? "مساء" : selectedShift === "DAY" ? "اليوم" : "صباح"})`,
+    );
     router.refresh();
   }
 
@@ -580,13 +598,15 @@ export function DoctorPatientCard({
             {tab === "schedule" && canManage && (
               <div className="space-y-3">
                 <p className="text-sm text-muted">
-                  اختر يوماً من أيام دوامك فقط — بدون ساعة
+                  اختر اليوم والفترة (صباح أو مساء) حسب دوامك — بدون ساعة دقيقة
                 </p>
                 {availability && availability.workDays.length > 0 ? (
                   <AppointmentDatePicker
                     availability={availability}
                     date={selectedDate || defaultDate}
+                    shift={selectedShift}
                     onDateChange={setSelectedDate}
+                    onShiftChange={setSelectedShift}
                     dayOnly
                   />
                 ) : (
@@ -629,7 +649,7 @@ export function DoctorPatientCard({
                       disabled={!availability?.workDays.length}
                       onClick={() => saveSchedule(true)}
                     >
-                      تعديل يوم الموعد الحالي
+                      تعديل الموعد الحالي
                     </Button>
                   )}
                 </div>

@@ -5,6 +5,12 @@ import { prisma } from "@/lib/db/prisma";
 import { createAuditLog } from "@/lib/audit/log";
 import { generateNumber } from "@/lib/utils";
 import { isDoctorAvailable } from "@/lib/services/appointments";
+import { algiersDateTime, algiersYmdBounds } from "@/lib/clinic-date";
+import {
+  SHIFT_LABEL_AR,
+  normalizeShift,
+  type WorkShift,
+} from "@/lib/doctor-availability";
 
 const DAY_MAP: DayOfWeek[] = [
   "SUNDAY",
@@ -16,37 +22,76 @@ const DAY_MAP: DayOfWeek[] = [
   "SATURDAY",
 ];
 
-/** بداية الموعد = بداية أول فترة دوام في ذلك اليوم (الحجز باليوم فقط) */
-async function dayAppointmentBounds(doctorId: string, dateStr: string, durationMinutes: number) {
-  const startAt = new Date(`${dateStr}T00:00:00`);
-  if (Number.isNaN(startAt.getTime())) {
+/**
+ * حدود موعد يومي لفترة (صباح/مساء):
+ * startAt = بداية فترة الدوام المختارة بتوقيت الجزائر
+ */
+async function dayAppointmentBounds(
+  doctorId: string,
+  dateStr: string,
+  durationMinutes: number,
+  shiftRaw?: string | null,
+) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
     return { error: "تاريخ غير صالح" as const };
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dayOnly = new Date(startAt);
-  dayOnly.setHours(0, 0, 0, 0);
-  if (dayOnly < today) {
+  const { start: dayStart } = algiersYmdBounds(dateStr);
+  const todayStart = algiersYmdBounds(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Africa/Algiers",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date()),
+  ).start;
+  if (dayStart < todayStart) {
     return { error: "لا يمكن حجز يوم ماضٍ" as const };
   }
 
-  const day = DAY_MAP[startAt.getDay()]!;
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const weekday = new Date(Date.UTC(y!, m! - 1, d!, 12, 0, 0)).getUTCDay();
+  const dayEnum = DAY_MAP[weekday]!;
+
   const windows = await prisma.workingHour.findMany({
-    where: { doctorId, dayOfWeek: day, isActive: true },
+    where: { doctorId, dayOfWeek: dayEnum, isActive: true },
     orderBy: { startTime: "asc" },
   });
   if (windows.length === 0) {
     return { error: "الطبيب غير متاح في هذا اليوم" as const };
   }
 
-  const [hh, mm] = windows[0]!.startTime.split(":").map(Number);
-  startAt.setHours(hh || 10, mm || 0, 0, 0);
+  const wanted = shiftRaw ? normalizeShift(shiftRaw) : null;
+  let chosen = wanted
+    ? windows.find((w) => normalizeShift(w.shift) === wanted)
+    : undefined;
+
+  if (wanted && wanted !== "DAY" && !chosen) {
+    return {
+      error:
+        wanted === "EVENING"
+          ? "لا يوجد دوام مسائي في هذا اليوم"
+          : "لا يوجد دوام صباحي في هذا اليوم",
+    } as const;
+  }
+
+  if (!chosen) {
+    // تلقائي: إن وُجد DAY استخدمه، وإلا أول نافذة
+    chosen =
+      windows.find((w) => normalizeShift(w.shift) === "DAY") || windows[0]!;
+  }
+
+  const shift = normalizeShift(chosen.shift);
+  const startAt = algiersDateTime(dateStr, chosen.startTime);
   const endAt = new Date(startAt.getTime() + durationMinutes * 60_000);
-  return { startAt, endAt };
+  return { startAt, endAt, shift, window: chosen };
 }
 
-/** تحديد موعد من قائمة مرضاي — يوم فقط بدون ساعة */
+function periodNote(shift: WorkShift, userName: string) {
+  return `موعد ${SHIFT_LABEL_AR[shift]} — محدد بواسطة ${userName}`;
+}
+
+/** تحديد موعد من قائمة مرضاي — يوم + صباح/مساء */
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (
@@ -62,10 +107,14 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const patientId = String(body.patientId || "");
   const dateStr = String(body.date || "");
+  const shiftRaw = body.shift != null ? String(body.shift) : "";
   const typeRaw = String(body.appointmentType || "ORTHO_FOLLOWUP");
   const notes = String(body.notes || "").trim();
   const forDoctorId = String(body.forDoctorId || "");
-  const durationMinutes = Math.min(180, Math.max(15, Number(body.durationMinutes) || 30));
+  const durationMinutes = Math.min(
+    180,
+    Math.max(15, Number(body.durationMinutes) || 30),
+  );
 
   if (!patientId || !dateStr) {
     return NextResponse.json({ error: "المريض والتاريخ مطلوبان" }, { status: 400 });
@@ -102,11 +151,16 @@ export async function POST(req: NextRequest) {
     ? (typeRaw as AppointmentType)
     : AppointmentType.ORTHO_FOLLOWUP;
 
-  const bounds = await dayAppointmentBounds(doctor.id, dateStr, durationMinutes);
+  const bounds = await dayAppointmentBounds(
+    doctor.id,
+    dateStr,
+    durationMinutes,
+    shiftRaw || null,
+  );
   if ("error" in bounds) {
     return NextResponse.json({ error: bounds.error }, { status: 400 });
   }
-  const { startAt, endAt } = bounds;
+  const { startAt, endAt, shift } = bounds;
 
   const availability = await isDoctorAvailable({
     doctorId: doctor.id,
@@ -121,6 +175,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const noteLine = notes || periodNote(shift, user.fullName);
+
   const appointment = await prisma.appointment.create({
     data: {
       appointmentNumber: generateNumber("APT"),
@@ -131,20 +187,24 @@ export async function POST(req: NextRequest) {
       startAt,
       endAt,
       durationMinutes,
-      notes: notes || `موعد يومي محدد بواسطة ${user.fullName}`,
+      notes: noteLine,
       createdById: user.id,
       statusHistory: {
         create: {
           newStatus: "CONFIRMED",
           changedById: user.id,
-          reason: `تحديد موعد (يوم فقط) من قائمة مرضاي بواسطة ${user.fullName}`,
+          reason: `تحديد موعد (${SHIFT_LABEL_AR[shift]}) بواسطة ${user.fullName}`,
         },
       },
     },
   });
 
   await prisma.orthodonticCase.updateMany({
-    where: { patientId, doctorId: doctor.id, status: { in: ["IN_PROGRESS", "NOT_STARTED"] } },
+    where: {
+      patientId,
+      doctorId: doctor.id,
+      status: { in: ["IN_PROGRESS", "NOT_STARTED"] },
+    },
     data: { nextAppointment: startAt },
   });
 
@@ -159,6 +219,7 @@ export async function POST(req: NextRequest) {
       doctorId: doctor.id,
       startAt: startAt.toISOString(),
       appointmentType,
+      shift,
       dayOnly: true,
     },
     reason: `تحديد موعد للمريض ${patient.fullName}`,
@@ -166,11 +227,15 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    appointment: { id: appointment.id, startAt: appointment.startAt.toISOString() },
+    appointment: {
+      id: appointment.id,
+      startAt: appointment.startAt.toISOString(),
+      shift,
+    },
   });
 }
 
-/** تعديل موعد موجود — يوم فقط */
+/** تعديل موعد موجود — يوم + فترة */
 export async function PATCH(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user || !["DOCTOR_SPECIALIST", "ADMIN"].includes(user.role.code)) {
@@ -183,6 +248,7 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const appointmentId = String(body.appointmentId || "");
   const dateStr = String(body.date || "");
+  const shiftRaw = body.shift != null ? String(body.shift) : "";
   if (!appointmentId || !dateStr) {
     return NextResponse.json({ error: "الموعد والتاريخ مطلوبان" }, { status: 400 });
   }
@@ -203,11 +269,12 @@ export async function PATCH(req: NextRequest) {
     doctor.id,
     dateStr,
     apt.durationMinutes || 30,
+    shiftRaw || null,
   );
   if ("error" in bounds) {
     return NextResponse.json({ error: bounds.error }, { status: 400 });
   }
-  const { startAt, endAt } = bounds;
+  const { startAt, endAt, shift } = bounds;
 
   const availability = await isDoctorAvailable({
     doctorId: doctor.id,
@@ -229,12 +296,13 @@ export async function PATCH(req: NextRequest) {
       startAt,
       endAt,
       status: "CONFIRMED",
+      notes: periodNote(shift, user.fullName),
       statusHistory: {
         create: {
           previousStatus: apt.status,
           newStatus: "CONFIRMED",
           changedById: user.id,
-          reason: `تعديل يوم الموعد بواسطة ${user.fullName}`,
+          reason: `تعديل الموعد إلى ${SHIFT_LABEL_AR[shift]} بواسطة ${user.fullName}`,
         },
       },
     },
@@ -255,9 +323,13 @@ export async function PATCH(req: NextRequest) {
     action: "APPOINTMENT_UPDATED_BY_DOCTOR",
     entityType: "Appointment",
     entityId: appointmentId,
-    newValue: { startAt: startAt.toISOString(), dayOnly: true },
+    newValue: { startAt: startAt.toISOString(), shift, dayOnly: true },
     reason: `تعديل موعد بواسطة ${user.fullName}`,
   });
 
-  return NextResponse.json({ ok: true, startAt: startAt.toISOString() });
+  return NextResponse.json({
+    ok: true,
+    startAt: startAt.toISOString(),
+    shift,
+  });
 }

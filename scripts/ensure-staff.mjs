@@ -372,6 +372,23 @@ export async function ensureStaff() {
           endTime: "13:30",
         },
       });
+      await prisma.workingHour.upsert({
+        where: {
+          doctorId_dayOfWeek_shift: {
+            doctorId: specialist.id,
+            dayOfWeek: day,
+            shift: "EVENING",
+          },
+        },
+        update: { startTime: "17:00", endTime: "21:00", isActive: true },
+        create: {
+          doctorId: specialist.id,
+          dayOfWeek: day,
+          shift: "EVENING",
+          startTime: "17:00",
+          endTime: "21:00",
+        },
+      });
     }
 
     console.log("[ensure-staff] Staff accounts ready");

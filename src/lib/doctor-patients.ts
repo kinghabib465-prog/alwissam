@@ -3,7 +3,8 @@ import {
   appointmentStatusAr,
   waitingRoomStatusAr,
 } from "@/i18n/ar";
-import { formatClinicAppointmentDay, formatClinicDate } from "@/lib/clinic-date";
+import { formatClinicAppointmentPeriod, formatClinicDate } from "@/lib/clinic-date";
+import { periodFromStartAt } from "@/lib/doctor-availability";
 import { generateQrAccessToken, getAppOrigin, patientQrLoginUrl } from "@/lib/patient-qr";
 import type { PatientRowData } from "@/components/doctor/DoctorPatientCard";
 
@@ -233,7 +234,9 @@ export async function loadDoctorPatients(
       paidLabel,
       paidTone,
       sessionsCount: p._count.appointments,
-      nextLabel: next ? formatClinicAppointmentDay(next.startAt) : null,
+      nextLabel: next
+        ? formatClinicAppointmentPeriod(next.startAt, periodFromStartAt(next.startAt))
+        : null,
       nextAppointmentId: next?.id || null,
       nextAtIso: next?.startAt.toISOString() || null,
       lastNote: latest?.notes || null,
