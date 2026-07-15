@@ -59,10 +59,15 @@ export async function loadDoctorPatients(
         where: { doctorId, deletedAt: null },
         orderBy: { startAt: "desc" },
         take: 8,
+        include: { request: true },
       },
       waitingRoomEntries: {
         where: { doctorId },
         orderBy: { arrivedAt: "desc" },
+        take: 1,
+      },
+      appointmentRequests: {
+        orderBy: { createdAt: "desc" },
         take: 1,
       },
       invoices: {
@@ -196,6 +201,15 @@ export async function loadDoctorPatients(
       p.account?.user.phone || p.account?.user.email || p.phone || "";
     const qrToken = p.account?.qrAccessToken || null;
 
+    const lastRequest =
+      p.appointmentRequests[0] ||
+      p.appointments.find((a) => a.request)?.request ||
+      null;
+    const visitReason =
+      lastRequest?.reason ||
+      latest?.request?.reason ||
+      null;
+
     return {
       id: p.id,
       fullName: p.fullName,
@@ -204,6 +218,9 @@ export async function loadDoctorPatients(
       age: p.age,
       city: p.city,
       allergies: p.allergies,
+      chronicIllnesses: p.chronicIllnesses,
+      visitReason,
+      isFirstVisit: lastRequest ? !lastRequest.isPreviousPatient : null,
       patientType: p.patientType,
       hasAccount: p.account?.status === "ACTIVE",
       accountLogin: p.account?.status === "ACTIVE" ? accountLogin : null,

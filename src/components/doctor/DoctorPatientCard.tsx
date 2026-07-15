@@ -34,6 +34,9 @@ export type PatientRowData = {
   age?: number | null;
   city?: string | null;
   allergies?: string | null;
+  chronicIllnesses?: string | null;
+  visitReason?: string | null;
+  isFirstVisit?: boolean | null;
   patientType?: string | null;
   hasAccount?: boolean;
   accountLogin?: string | null;
@@ -430,8 +433,24 @@ export function DoctorPatientCard({
                     )}
                     {patient.city && (
                       <div>
-                        <dt className="text-xs text-muted">المدينة</dt>
+                        <dt className="text-xs text-muted">السكن</dt>
                         <dd className="text-navy">{patient.city}</dd>
+                      </div>
+                    )}
+                    {patient.visitReason && (
+                      <div className="sm:col-span-2">
+                        <dt className="text-xs text-muted">سبب الزيارة</dt>
+                        <dd className="font-semibold text-navy">
+                          {patient.visitReason}
+                        </dd>
+                      </div>
+                    )}
+                    {patient.isFirstVisit != null && (
+                      <div>
+                        <dt className="text-xs text-muted">أول زيارة</dt>
+                        <dd className="text-navy">
+                          {patient.isFirstVisit ? "نعم" : "لا — مريض سابق"}
+                        </dd>
                       </div>
                     )}
                     <div className="sm:col-span-2">
@@ -442,6 +461,11 @@ export function DoctorPatientCard({
                           : "غير محدد"}
                       </dd>
                     </div>
+                    {patient.chronicIllnesses && (
+                      <div className="sm:col-span-2 rounded-xl bg-red-50 px-3 py-2 text-danger">
+                        مرض يعاني منه: {patient.chronicIllnesses}
+                      </div>
+                    )}
                     {patient.allergies && (
                       <div className="sm:col-span-2 rounded-xl bg-red-50 px-3 py-2 text-danger">
                         حساسية: {patient.allergies}

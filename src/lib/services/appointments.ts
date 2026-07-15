@@ -529,6 +529,20 @@ export async function directPatientFromRequest(params: {
     });
   }
 
+  const receptionBits = [
+    request.reason ? `سبب الزيارة: ${request.reason}` : null,
+    request.city ? `السكن: ${request.city}` : null,
+    request.chronicIllnesses
+      ? `مرض يعاني منه: ${request.chronicIllnesses}`
+      : null,
+    request.isPreviousPatient === false
+      ? "أول زيارة"
+      : request.isPreviousPatient
+        ? "مريض سابق"
+        : null,
+    request.age != null ? `العمر: ${request.age}` : null,
+  ].filter(Boolean);
+
   if (!patient) {
     patient = await prisma.patient.create({
       data: {
@@ -540,10 +554,17 @@ export async function directPatientFromRequest(params: {
         gender: request.gender ?? undefined,
         city: request.city ?? undefined,
         chronicIllnesses: request.chronicIllnesses ?? undefined,
+        notes: receptionBits.length
+          ? `معلومات الاستقبال — ${receptionBits.join(" · ")}`
+          : undefined,
       },
     });
   } else {
     // حدّث بيانات الاستقبال إن توفّرت
+    const prevNotes = patient.notes?.trim() || "";
+    const receptionLine = receptionBits.length
+      ? `معلومات الاستقبال — ${receptionBits.join(" · ")}`
+      : "";
     patient = await prisma.patient.update({
       where: { id: patient.id },
       data: {
@@ -552,6 +573,25 @@ export async function directPatientFromRequest(params: {
         city: request.city?.trim() || patient.city,
         chronicIllnesses:
           request.chronicIllnesses?.trim() || patient.chronicIllnesses,
+        notes: receptionLine
+          ? prevNotes && !prevNotes.includes("معلومات الاستقبال")
+            ? `${receptionLine}\n${prevNotes}`
+            : receptionLine
+          : patient.notes,
+      },
+    });
+  }
+
+  // سجل طبي مختصر للمرض المزمن من الاستقبال
+  if (request.chronicIllnesses?.trim()) {
+    await prisma.medicalHistory.upsert({
+      where: { patientId: patient.id },
+      update: {
+        systemicDiseases: request.chronicIllnesses.trim(),
+      },
+      create: {
+        patientId: patient.id,
+        systemicDiseases: request.chronicIllnesses.trim(),
       },
     });
   }
@@ -561,10 +601,13 @@ export async function directPatientFromRequest(params: {
   const endAt = new Date(now.getTime() + duration * 60_000);
   const note = [
     `تم التوجيه بواسطة ${params.userName}`,
+    ...receptionBits,
     params.note?.trim() || null,
   ]
     .filter(Boolean)
     .join(" — ");
+
+  const wrNote = receptionBits.join(" · ") || params.note || null;
 
   const result = await prisma.$transaction(async (tx) => {
     const appointment = await tx.appointment.create({
@@ -620,7 +663,7 @@ export async function directPatientFromRequest(params: {
         doctorId: params.doctorId,
         status: "WAITING",
         urgency: request.isEmergency,
-        note: params.note,
+        note: wrNote,
       },
     });
 
