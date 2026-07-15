@@ -136,9 +136,6 @@ export const commonAr = {
 
 export const navSecretaryAr = [
   { href: "/secretary/dashboard", label: "الاستقبال", icon: "LayoutDashboard" },
-  { href: "/secretary/today", label: "مواعيد اليوم", icon: "Calendar" },
-  { href: "/secretary/directed", label: "الموجهون", icon: "Users" },
-  { href: "/secretary/payments", label: "الدفع", icon: "Wallet" },
 ];
 
 export const navDoctorGeneralAr = [
@@ -148,19 +145,9 @@ export const navDoctorGeneralAr = [
 
 export const navDoctorSpecialistAr = [
   {
-    href: "/doctor/specialist/workday",
-    label: "يوم العمل",
+    href: "/doctor/specialist/dashboard",
+    label: "المعاينة",
     icon: "Activity",
-    children: [
-      {
-        href: "/doctor/specialist/dashboard",
-        label: "المعاينة",
-      },
-      {
-        href: "/doctor/specialist/today",
-        label: "لوحة اليوم",
-      },
-    ],
   },
   { href: "/doctor/specialist/patients", label: "مرضاي", icon: "UserRound" },
   { href: "/doctor/specialist/doctors", label: "الأطباء", icon: "Stethoscope" },

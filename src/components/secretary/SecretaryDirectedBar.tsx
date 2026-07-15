@@ -105,7 +105,7 @@ export function SecretaryDirectedBar({
           </span>
         )}
         {needsPay ? (
-          <Link href={`/secretary/payments?invoice=${unpaidInvoiceId}`}>
+          <Link href={`/secretary/dashboard?tab=pay&invoice=${unpaidInvoiceId}`}>
             <Button size="sm" variant="secondary">
               دفع
             </Button>

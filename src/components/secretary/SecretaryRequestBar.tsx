@@ -119,7 +119,7 @@ export function SecretaryRequestBar({
     const data = await api("direct", { doctorId });
     if (!data) return;
     setOpenDirect(false);
-    router.push("/secretary/directed");
+    router.push("/secretary/dashboard?tab=waiting");
     router.refresh();
   }
 
@@ -165,8 +165,8 @@ export function SecretaryRequestBar({
           <Link
             href={
               unpaidInvoiceId
-                ? `/secretary/payments?invoice=${unpaidInvoiceId}`
-                : "/secretary/payments"
+                ? `/secretary/dashboard?tab=pay&invoice=${unpaidInvoiceId}`
+                : "/secretary/dashboard?tab=pay"
             }
           >
             <Button size="sm" className="bg-blue hover:bg-[#145a72]">

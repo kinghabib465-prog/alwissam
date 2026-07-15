@@ -22,9 +22,69 @@ export type TodayAptClient = {
 
 type DoctorOpt = { id: string; name: string; type: string };
 
+function PeriodBlock({
+  title,
+  hours,
+  items,
+  doctors,
+  csrfToken,
+}: {
+  title: string;
+  hours: string;
+  items: TodayAptClient[];
+  doctors: DoctorOpt[];
+  csrfToken: string;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-bold text-teal">
+        {title}{" "}
+        <span className="font-latin tabular-nums">
+          ({toLatinDigits(items.length)})
+        </span>
+        <span className="font-latin mr-2 text-xs font-normal tabular-nums text-muted">
+          {hours}
+        </span>
+      </p>
+      <ol className="rounded-xl border border-border/80 bg-[#F8FBFC] px-3 py-2 text-sm">
+        {items.map((apt, index) => (
+          <li
+            key={`name-${apt.id}`}
+            className="flex gap-2 border-b border-border/50 py-1.5 last:border-0"
+          >
+            <span className="font-latin w-6 shrink-0 font-bold tabular-nums text-teal">
+              {toLatinDigits(index + 1)}.
+            </span>
+            <span className="font-bold text-navy">{apt.fullName}</span>
+            <span className="mr-auto text-xs text-muted">{apt.doctorName}</span>
+          </li>
+        ))}
+      </ol>
+      {items.map((apt, index) => (
+        <SecretaryScheduledBar
+          key={apt.id}
+          appointmentId={apt.id}
+          fullName={apt.fullName}
+          phone={apt.phone}
+          age={apt.age}
+          city={apt.city}
+          doctorId={apt.doctorId}
+          doctorName={apt.doctorName}
+          startAtIso={apt.startAtIso}
+          appointmentTypeLabel={apt.appointmentTypeLabel}
+          queueOrder={index + 1}
+          doctors={doctors}
+          csrfToken={csrfToken}
+        />
+      ))}
+    </div>
+  );
+}
+
 /**
- * خانة منسدلة «مواعيد اليوم» —
- * مواعيد بتاريخ اليوم فقط · السكرتير يوجّه منها · بدون فتح حساب.
+ * مواعيد اليوم — نفس المنطق في الاستقبال وفي أي تبويب.
+ * compactHeader: داخل مركز الاستقبال بدون خانة منسدلة مكررة.
  */
 export function SecretaryTodayAppointmentsDrop({
   todayLabel,
@@ -34,6 +94,7 @@ export function SecretaryTodayAppointmentsDrop({
   doctors,
   csrfToken,
   defaultOpen = true,
+  compactHeader = false,
 }: {
   todayLabel: string;
   clinicShift: "MORNING" | "EVENING" | null;
@@ -42,8 +103,8 @@ export function SecretaryTodayAppointmentsDrop({
   doctors: DoctorOpt[];
   csrfToken: string;
   defaultOpen?: boolean;
+  compactHeader?: boolean;
 }) {
-  // صباحاً: الصباحي فقط · مساءً/خارج الدوام: المتأخرون الصباحيون + المسائي
   const visibleMorning = morning;
   const visibleEvening = clinicShift === "MORNING" ? [] : evening;
   const total = visibleMorning.length + visibleEvening.length;
@@ -51,10 +112,61 @@ export function SecretaryTodayAppointmentsDrop({
 
   const shiftHint =
     clinicShift === "MORNING"
-      ? `الفترة الآن: صباحي ${CLINIC_SHIFT_HOURS.MORNING.start}–${CLINIC_SHIFT_HOURS.MORNING.end} — مواعيد الصباح فقط`
+      ? `الفترة الآن: صباحي ${CLINIC_SHIFT_HOURS.MORNING.start}–${CLINIC_SHIFT_HOURS.MORNING.end}`
       : clinicShift === "EVENING"
-        ? `الفترة الآن: مسائي ${CLINIC_SHIFT_HOURS.EVENING.start}–${CLINIC_SHIFT_HOURS.EVENING.end} — المسائي + صباحي لم يُوجَّه بعد`
-        : "خارج أوقات الدوام — كل مواعيد اليوم بانتظار التوجيه";
+        ? `الفترة الآن: مسائي ${CLINIC_SHIFT_HOURS.EVENING.start}–${CLINIC_SHIFT_HOURS.EVENING.end} — مع أي صباحي متأخر`
+        : "خارج أوقات الدوام — كل مواعيد اليوم";
+
+  const body = (
+    <div className={compactHeader ? "space-y-4" : "space-y-4 border-t border-border px-3 py-3 sm:px-4"}>
+      <p className="font-latin text-xs tabular-nums text-muted">
+        {todayLabel} · {shiftHint}
+      </p>
+      <p className="text-xs text-muted">
+        نفس قائمة المواعيد السابقة: أسماء مرتّبة · توجيه للطبيب عند الوصول.
+      </p>
+
+      {total === 0 ? (
+        <EmptyState
+          title={
+            clinicShift === "MORNING"
+              ? "لا مواعيد صباحية بانتظار التوجيه"
+              : clinicShift === "EVENING"
+                ? "لا مواعيد مسائية بانتظار التوجيه"
+                : "لا مواعيد اليوم بانتظار التوجيه"
+          }
+          description="الموعد الذي يحدده الطبيب يظهر هنا في يومه فقط."
+        />
+      ) : (
+        <>
+          <PeriodBlock
+            title={
+              clinicShift === "EVENING" ? "صباحي (لم يُوجَّه بعد)" : "صباحي"
+            }
+            hours={`${CLINIC_SHIFT_HOURS.MORNING.start}–${CLINIC_SHIFT_HOURS.MORNING.end}`}
+            items={visibleMorning}
+            doctors={doctors}
+            csrfToken={csrfToken}
+          />
+          <PeriodBlock
+            title="مسائي"
+            hours={`${CLINIC_SHIFT_HOURS.EVENING.start}–${CLINIC_SHIFT_HOURS.EVENING.end}`}
+            items={visibleEvening}
+            doctors={doctors}
+            csrfToken={csrfToken}
+          />
+        </>
+      )}
+    </div>
+  );
+
+  if (compactHeader) {
+    return (
+      <div className="overflow-hidden rounded-2xl border border-teal/35 bg-white p-3 shadow-sm sm:p-4">
+        {body}
+      </div>
+    );
+  }
 
   return (
     <details
@@ -76,118 +188,7 @@ export function SecretaryTodayAppointmentsDrop({
         </div>
         <ChevronDown className="h-4 w-4 shrink-0 text-muted transition group-open:rotate-180" />
       </summary>
-
-      <div className="space-y-4 border-t border-border px-3 py-3 sm:px-4">
-        <p className="font-latin text-xs tabular-nums text-muted">{shiftHint}</p>
-        <p className="text-xs text-muted">
-          أسماء المرضى مرتّبة أبجدياً ضمن الفترة — عند الوصول وجّهي للطبيب.
-        </p>
-
-        {total === 0 ? (
-          <EmptyState
-            title={
-              clinicShift === "MORNING"
-                ? "لا مواعيد صباحية بانتظار التوجيه"
-                : clinicShift === "EVENING"
-                  ? "لا مواعيد مسائية بانتظار التوجيه"
-                  : "لا مواعيد اليوم بانتظار التوجيه"
-            }
-            description="عندما يحين يوم الموعد يظهر هنا — الصباح في الصباح والمساء في المساء."
-          />
-        ) : (
-          <>
-            {visibleMorning.length > 0 ? (
-              <div className="space-y-2">
-                <p className="text-sm font-bold text-teal">
-                  {clinicShift === "EVENING" ? "صباحي (لم يُوجَّه بعد)" : "صباحي"}{" "}
-                  <span className="font-latin tabular-nums">
-                    ({toLatinDigits(visibleMorning.length)})
-                  </span>
-                  <span className="font-latin mr-2 text-xs font-normal tabular-nums text-muted">
-                    {CLINIC_SHIFT_HOURS.MORNING.start}–
-                    {CLINIC_SHIFT_HOURS.MORNING.end}
-                  </span>
-                </p>
-                <ol className="rounded-xl border border-border/80 bg-[#F8FBFC] px-3 py-2 text-sm">
-                  {visibleMorning.map((apt, index) => (
-                    <li
-                      key={`name-m-${apt.id}`}
-                      className="flex gap-2 border-b border-border/50 py-1.5 last:border-0"
-                    >
-                      <span className="font-latin w-6 shrink-0 font-bold tabular-nums text-teal">
-                        {toLatinDigits(index + 1)}.
-                      </span>
-                      <span className="font-bold text-navy">{apt.fullName}</span>
-                    </li>
-                  ))}
-                </ol>
-                {visibleMorning.map((apt, index) => (
-                  <SecretaryScheduledBar
-                    key={apt.id}
-                    appointmentId={apt.id}
-                    fullName={apt.fullName}
-                    phone={apt.phone}
-                    age={apt.age}
-                    city={apt.city}
-                    doctorId={apt.doctorId}
-                    doctorName={apt.doctorName}
-                    startAtIso={apt.startAtIso}
-                    appointmentTypeLabel={apt.appointmentTypeLabel}
-                    queueOrder={index + 1}
-                    doctors={doctors}
-                    csrfToken={csrfToken}
-                  />
-                ))}
-              </div>
-            ) : null}
-
-            {visibleEvening.length > 0 ? (
-              <div className="space-y-2">
-                <p className="text-sm font-bold text-teal">
-                  مسائي{" "}
-                  <span className="font-latin tabular-nums">
-                    ({toLatinDigits(visibleEvening.length)})
-                  </span>
-                  <span className="font-latin mr-2 text-xs font-normal tabular-nums text-muted">
-                    {CLINIC_SHIFT_HOURS.EVENING.start}–
-                    {CLINIC_SHIFT_HOURS.EVENING.end}
-                  </span>
-                </p>
-                <ol className="rounded-xl border border-border/80 bg-[#F8FBFC] px-3 py-2 text-sm">
-                  {visibleEvening.map((apt, index) => (
-                    <li
-                      key={`name-e-${apt.id}`}
-                      className="flex gap-2 border-b border-border/50 py-1.5 last:border-0"
-                    >
-                      <span className="font-latin w-6 shrink-0 font-bold tabular-nums text-teal">
-                        {toLatinDigits(index + 1)}.
-                      </span>
-                      <span className="font-bold text-navy">{apt.fullName}</span>
-                    </li>
-                  ))}
-                </ol>
-                {visibleEvening.map((apt, index) => (
-                  <SecretaryScheduledBar
-                    key={apt.id}
-                    appointmentId={apt.id}
-                    fullName={apt.fullName}
-                    phone={apt.phone}
-                    age={apt.age}
-                    city={apt.city}
-                    doctorId={apt.doctorId}
-                    doctorName={apt.doctorName}
-                    startAtIso={apt.startAtIso}
-                    appointmentTypeLabel={apt.appointmentTypeLabel}
-                    queueOrder={index + 1}
-                    doctors={doctors}
-                    csrfToken={csrfToken}
-                  />
-                ))}
-              </div>
-            ) : null}
-          </>
-        )}
-      </div>
+      {body}
     </details>
   );
 }

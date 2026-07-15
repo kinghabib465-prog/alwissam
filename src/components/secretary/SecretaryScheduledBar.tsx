@@ -73,7 +73,7 @@ export function SecretaryScheduledBar({
       setError(data.error || "فشل الإدخال");
       return;
     }
-    router.push("/secretary/directed");
+    router.push("/secretary/dashboard?tab=waiting");
     router.refresh();
   }
 
