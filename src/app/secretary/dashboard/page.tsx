@@ -18,6 +18,10 @@ import { formatClinicDate } from "@/lib/clinic-date";
 import { toLatinDigits } from "@/lib/latin-digits";
 import { CLINIC_SHIFT_HOURS } from "@/lib/clinic-shifts";
 import { periodFromStartAt } from "@/lib/doctor-availability";
+import {
+  buildSecretaryDoctorOptions,
+  loadSecretaryDoctorsForDay,
+} from "@/lib/resolve-clinic-doctors";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +33,7 @@ function mapApt(
   const period = periodFromStartAt(apt.startAt);
   return {
     id: apt.id,
-    fullName: apt.patient.fullName,
+    fullName: apt.patient.fullName?.trim() || "—",
     phone: apt.patient.phone,
     age: apt.patient.age,
     city: apt.patient.city,
@@ -62,42 +66,20 @@ export default async function SecretaryDashboardPage() {
       take: 100,
     }),
     listSecretaryTodayPendingCheckIns(),
-    prisma.doctor.findMany({
-      where: { isActive: true },
-      include: {
-        user: true,
-        workingHours: {
-          where: { isActive: true, dayOfWeek: today },
-        },
-      },
-      orderBy: { type: "asc" },
-    }),
+    loadSecretaryDoctorsForDay(today),
   ]);
 
-  const present = doctors.filter((d) => d.workingHours.length > 0);
-  const doctorSource = present.length > 0 ? present : doctors;
-  const seenNames = new Set<string>();
-  const doctorOpts = doctorSource
-    .map((d) => ({
-      id: d.id,
-      name: d.user.fullName,
-      type: d.type,
-    }))
-    .filter((d) => {
-      const key = d.name
-        .replace(/الدكتور|د\.|دكتور/gi, "")
-        .replace(/\s+/g, "")
-        .toLowerCase();
-      if (seenNames.has(key)) return false;
-      seenNames.add(key);
-      return true;
-    });
+  const preferIds = [
+    ...todayPending.morning.map((a) => a.doctorId),
+    ...todayPending.evening.map((a) => a.doctorId),
+  ];
+  const doctorOpts = buildSecretaryDoctorOptions(doctors, preferIds).filter(
+    (d) => doctors.find((x) => x.id === d.id)?.isActive !== false,
+  );
 
   const todayLabel = formatClinicDate(start);
   const morning = CLINIC_SHIFT_HOURS.MORNING;
   const evening = CLINIC_SHIFT_HOURS.EVENING;
-  const morningApts = todayPending.morning.map(mapApt);
-  const eveningApts = todayPending.evening.map(mapApt);
 
   return (
     <DashboardShell items={navSecretaryAr as never} userName={user.fullName}>
@@ -112,14 +94,13 @@ export default async function SecretaryDashboardPage() {
       <SecretaryTodayAppointmentsDrop
         todayLabel={todayLabel}
         clinicShift={todayPending.clinicShift}
-        morning={morningApts}
-        evening={eveningApts}
+        morning={todayPending.morning.map(mapApt)}
+        evening={todayPending.evening.map(mapApt)}
         doctors={doctorOpts}
         csrfToken={user.csrfToken}
         defaultOpen
       />
 
-      {/* 2 — تسجيل جديد / مدخل */}
       <section className="mb-5">
         <p className="mb-2 text-sm font-bold text-navy">
           <span className="ml-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-navy text-xs text-white">

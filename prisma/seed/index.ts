@@ -291,6 +291,9 @@ async function main() {
     DayOfWeek.SUNDAY,
     DayOfWeek.MONDAY,
     DayOfWeek.TUESDAY,
+    DayOfWeek.WEDNESDAY,
+    DayOfWeek.THURSDAY,
+    DayOfWeek.SATURDAY,
   ];
   for (const day of mananaDays) {
     await prisma.workingHour.upsert({
@@ -325,6 +328,26 @@ async function main() {
         shift: "EVENING",
         startTime: "16:00",
         endTime: "22:00",
+      },
+    });
+  }
+  for (const shift of ["MORNING", "EVENING", "DAY"] as const) {
+    await prisma.workingHour.upsert({
+      where: {
+        doctorId_dayOfWeek_shift: {
+          doctorId: specialist.id,
+          dayOfWeek: DayOfWeek.FRIDAY,
+          shift,
+        },
+      },
+      update: { isActive: false },
+      create: {
+        doctorId: specialist.id,
+        dayOfWeek: DayOfWeek.FRIDAY,
+        shift,
+        startTime: shift === "EVENING" ? "16:00" : "07:00",
+        endTime: shift === "EVENING" ? "22:00" : "14:00",
+        isActive: false,
       },
     });
   }

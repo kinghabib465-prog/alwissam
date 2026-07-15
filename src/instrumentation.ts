@@ -13,4 +13,16 @@ export async function register() {
   } catch (err) {
     console.error("[instrumentation] ensure-staff failed:", err);
   }
+
+  try {
+    const { repairMananaDoctorDuplicates } = await import(
+      "@/lib/resolve-clinic-doctors"
+    );
+    const result = await repairMananaDoctorDuplicates();
+    if (result.migrated || result.deactivated) {
+      console.log("[instrumentation] Manana doctor repair:", result);
+    }
+  } catch (err) {
+    console.error("[instrumentation] Manana repair failed:", err);
+  }
 }

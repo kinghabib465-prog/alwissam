@@ -1,5 +1,4 @@
 import { requireUser } from "@/lib/auth/current-user";
-import { prisma } from "@/lib/db/prisma";
 import { DashboardShell, TopHeader } from "@/components/layout/DashboardShell";
 import { appointmentTypeAr, navSecretaryAr } from "@/i18n/ar";
 import { SecretaryAutoRefresh } from "@/components/secretary/SecretaryAutoRefresh";
@@ -11,6 +10,10 @@ import {
 import { formatClinicDate } from "@/lib/clinic-date";
 import { periodFromStartAt } from "@/lib/doctor-availability";
 import { CLINIC_SHIFT_HOURS } from "@/lib/clinic-shifts";
+import {
+  buildSecretaryDoctorOptions,
+  loadSecretaryDoctorsForDay,
+} from "@/lib/resolve-clinic-doctors";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +25,7 @@ function mapApt(
   const period = periodFromStartAt(apt.startAt);
   return {
     id: apt.id,
-    fullName: apt.patient.fullName,
+    fullName: apt.patient.fullName?.trim() || "—",
     phone: apt.patient.phone,
     age: apt.patient.age,
     city: apt.patient.city,
@@ -40,31 +43,18 @@ function mapApt(
   };
 }
 
-/** صفحة مواعيد اليوم — خانة منسدلة + توجيه بدون فتح حساب */
 export default async function SecretaryTodayAppointmentsPage() {
   const user = await requireUser(["SECRETARY", "ADMIN"]);
   const today = algiersWeekday();
   const todayPending = await listSecretaryTodayPendingCheckIns();
-
-  const doctors = await prisma.doctor.findMany({
-    where: { isActive: true },
-    include: {
-      user: true,
-      workingHours: {
-        where: { isActive: true, dayOfWeek: today },
-        take: 1,
-      },
-    },
-    orderBy: { type: "asc" },
-  });
-
-  const present = doctors.filter((d) => d.workingHours.length > 0);
-  const doctorSource = present.length > 0 ? present : doctors;
-  const doctorOpts = doctorSource.map((d) => ({
-    id: d.id,
-    name: d.user.fullName,
-    type: d.type,
-  }));
+  const doctors = await loadSecretaryDoctorsForDay(today);
+  const preferIds = [
+    ...todayPending.morning.map((a) => a.doctorId),
+    ...todayPending.evening.map((a) => a.doctorId),
+  ];
+  const doctorOpts = buildSecretaryDoctorOptions(doctors, preferIds).filter(
+    (d) => doctors.find((x) => x.id === d.id)?.isActive !== false,
+  );
 
   const todayLabel = formatClinicDate(todayPending.start);
   const morning = CLINIC_SHIFT_HOURS.MORNING;

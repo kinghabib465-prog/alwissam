@@ -228,8 +228,58 @@ export async function ensureStaff() {
     for (const dup of mananaDupes) {
       if (dup.user.email?.toLowerCase() === canonEmail) continue;
       console.warn(
-        `[ensure-staff] deactivating duplicate owner doctor ${dup.id} (${dup.user.email || dup.user.fullName})`,
+        `[ensure-staff] merging duplicate owner doctor ${dup.id} (${dup.user.email || dup.user.fullName}) → ${specialist.id}`,
       );
+      const moved = await Promise.all([
+        prisma.appointment.updateMany({
+          where: { doctorId: dup.id },
+          data: { doctorId: specialist.id },
+        }),
+        prisma.waitingRoomEntry.updateMany({
+          where: { doctorId: dup.id },
+          data: { doctorId: specialist.id },
+        }),
+        prisma.invoice.updateMany({
+          where: { doctorId: dup.id },
+          data: { doctorId: specialist.id },
+        }),
+        prisma.orthodonticCase.updateMany({
+          where: { doctorId: dup.id },
+          data: { doctorId: specialist.id },
+        }),
+        prisma.surgeryCase.updateMany({
+          where: { doctorId: dup.id },
+          data: { doctorId: specialist.id },
+        }),
+        prisma.treatmentPlan.updateMany({
+          where: { doctorId: dup.id },
+          data: { doctorId: specialist.id },
+        }),
+        prisma.treatmentSession.updateMany({
+          where: { doctorId: dup.id },
+          data: { doctorId: specialist.id },
+        }),
+        prisma.diagnosis.updateMany({
+          where: { doctorId: dup.id },
+          data: { doctorId: specialist.id },
+        }),
+        prisma.prescription.updateMany({
+          where: { doctorId: dup.id },
+          data: { doctorId: specialist.id },
+        }),
+        prisma.prostheticCase.updateMany({
+          where: { doctorId: dup.id },
+          data: { doctorId: specialist.id },
+        }),
+        prisma.operation.updateMany({
+          where: { doctorId: dup.id },
+          data: { doctorId: specialist.id },
+        }),
+      ]);
+      const total = moved.reduce((s, r) => s + (r.count || 0), 0);
+      if (total) {
+        console.warn(`[ensure-staff] migrated ${total} related rows to canonical Manana`);
+      }
       await prisma.doctor.update({
         where: { id: dup.id },
         data: { isActive: false },
@@ -350,11 +400,16 @@ export async function ensureStaff() {
       console.warn("[ensure-staff] LASER_WHITENING service skipped:", err?.message);
     }
 
-    for (const day of [
+    // دوام منانة: كل أيام العمل (ما عدا الجمعة) — صباحي ومسائي
+    const mananaDays = [
       DayOfWeek.SUNDAY,
       DayOfWeek.MONDAY,
       DayOfWeek.TUESDAY,
-    ]) {
+      DayOfWeek.WEDNESDAY,
+      DayOfWeek.THURSDAY,
+      DayOfWeek.SATURDAY,
+    ];
+    for (const day of mananaDays) {
       await prisma.workingHour.upsert({
         where: {
           doctorId_dayOfWeek_shift: {
@@ -387,6 +442,27 @@ export async function ensureStaff() {
           shift: "EVENING",
           startTime: "16:00",
           endTime: "22:00",
+        },
+      });
+    }
+    // الجمعة متوقفة لمنانة
+    for (const shift of ["MORNING", "EVENING", "DAY"]) {
+      await prisma.workingHour.upsert({
+        where: {
+          doctorId_dayOfWeek_shift: {
+            doctorId: specialist.id,
+            dayOfWeek: DayOfWeek.FRIDAY,
+            shift,
+          },
+        },
+        update: { isActive: false },
+        create: {
+          doctorId: specialist.id,
+          dayOfWeek: DayOfWeek.FRIDAY,
+          shift,
+          startTime: shift === "EVENING" ? "16:00" : "07:00",
+          endTime: shift === "EVENING" ? "22:00" : "14:00",
+          isActive: false,
         },
       });
     }

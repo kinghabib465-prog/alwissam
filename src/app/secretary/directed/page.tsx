@@ -12,6 +12,10 @@ import { DayOfWeek } from "@prisma/client";
 import { algiersDayBounds } from "@/lib/daily-queue";
 import { algiersWeekday } from "@/lib/secretary-today";
 import { formatClinicDate } from "@/lib/clinic-date";
+import {
+  coalesceDoctorIdForDisplay,
+  findCanonicalMananaDoctor,
+} from "@/lib/resolve-clinic-doctors";
 
 export const dynamic = "force-dynamic";
 
@@ -22,12 +26,13 @@ const STATUS_ORDER: Record<string, number> = {
   SESSION_DONE: 3,
 };
 
-/** الموجهون — يوم الجزائر فقط · مسار: انتظار → معاينة → دفع/إغلاق */
+/** الموجهون — يوم الجزائر · مواعيد منانة تظهر بأسماء المرضى تحت حسابها الرسمي */
 export default async function SecretaryDirectedPage() {
   const user = await requireUser(["SECRETARY", "ADMIN"]);
   const { start, end } = algiersDayBounds();
   const today = algiersWeekday();
   const todayLabel = formatClinicDate(start);
+  const canonManana = await findCanonicalMananaDoctor();
 
   const [entries, doctors] = await Promise.all([
     prisma.waitingRoomEntry.findMany({
@@ -51,7 +56,20 @@ export default async function SecretaryDirectedPage() {
       orderBy: { arrivedAt: "asc" },
     }),
     prisma.doctor.findMany({
-      where: { isActive: true },
+      where: {
+        OR: [
+          { isActive: true, user: { deletedAt: null } },
+          // لعرض نوافذ من لديها مرضى اليوم حتى لو عُطّل الحساب المكرر
+          {
+            waitingRoomEntries: {
+              some: {
+                status: { not: "LEFT" },
+                arrivedAt: { gte: start, lt: end },
+              },
+            },
+          },
+        ],
+      },
       include: {
         user: true,
         workingHours: {
@@ -63,7 +81,48 @@ export default async function SecretaryDirectedPage() {
     }),
   ]);
 
-  const sortedDoctors = [...doctors].sort((a, b) => {
+  // دمج مرضى منانة المكررة تحت الحساب الرسمي
+  const normalized = entries.map((e) => {
+    const displayDoctorId = coalesceDoctorIdForDisplay(
+      e.doctorId,
+      e.doctor.user.fullName,
+      canonManana?.id || null,
+      e.doctor.isActive,
+    );
+    return { ...e, displayDoctorId };
+  });
+
+  const activeDoctors = doctors.filter(
+    (d) =>
+      d.isActive ||
+      normalized.some((e) => e.displayDoctorId === d.id || e.doctorId === d.id),
+  );
+
+  // تأكد من وجود منانة الرسمية في القائمة
+  let doctorList = activeDoctors;
+  if (canonManana && !doctorList.some((d) => d.id === canonManana.id)) {
+    doctorList = [
+      {
+        ...canonManana,
+        workingHours: [],
+      } as (typeof doctors)[number],
+      ...doctorList,
+    ];
+  }
+
+  // أخفِ المكرّرين باسم منانة غير الرسمي
+  const seenManana = new Set<string>();
+  doctorList = doctorList.filter((d) => {
+    if (!/منانة/.test(d.user.fullName)) return true;
+    if (canonManana && d.id === canonManana.id) return true;
+    if (canonManana) return false;
+    const key = d.user.fullName.replace(/\s+/g, "");
+    if (seenManana.has(key)) return false;
+    seenManana.add(key);
+    return true;
+  });
+
+  const sortedDoctors = [...doctorList].sort((a, b) => {
     const aPresent = a.workingHours.length > 0 ? 0 : 1;
     const bPresent = b.workingHours.length > 0 ? 0 : 1;
     if (aPresent !== bPresent) return aPresent - bPresent;
@@ -72,8 +131,8 @@ export default async function SecretaryDirectedPage() {
   });
 
   const windows: DoctorWindow[] = sortedDoctors.map((doc) => {
-    const list = entries
-      .filter((e) => e.doctorId === doc.id)
+    const list = normalized
+      .filter((e) => e.displayDoctorId === doc.id)
       .sort((a, b) => {
         const sa = STATUS_ORDER[a.status] ?? 9;
         const sb = STATUS_ORDER[b.status] ?? 9;
@@ -100,7 +159,7 @@ export default async function SecretaryDirectedPage() {
         return {
           entryId: entry.id,
           patientId: entry.patientId,
-          fullName: entry.patient.fullName,
+          fullName: entry.patient.fullName?.trim() || "—",
           phone: entry.patient.phone,
           age: entry.patient.age,
           city: entry.patient.city,
@@ -115,20 +174,20 @@ export default async function SecretaryDirectedPage() {
     };
   });
 
-  const hasAny = entries.length > 0;
+  const hasAny = normalized.length > 0;
 
   return (
     <DashboardShell items={navSecretaryAr as never} userName={user.fullName}>
       <TopHeader
         title="المرضى الموجَّهون"
-        subtitle={`${todayLabel} — انتظار · معاينة · دفع ثم إغلاق الزيارة`}
+        subtitle={`${todayLabel} — أسماء المرضى تحت طبيبهم (منانة الرسمي)`}
       />
 
-      {!hasAny && windows.every((w) => w.count === 0) ? (
+      {!hasAny ? (
         <Card>
           <EmptyState
             title="لا مرضى موجَّهين اليوم"
-            description="من «مواعيد اليوم» أو تسجيل المدخل → توجيه → يظهر هنا ليوم الجزائر فقط."
+            description="من «مواعيد اليوم» أو تسجيل المدخل → توجيه → يظهر الاسم هنا."
           />
         </Card>
       ) : (
