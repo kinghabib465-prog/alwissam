@@ -5,6 +5,9 @@ import { Card, EmptyState } from "@/components/ui/Card";
 import { navDoctorSpecialistAr } from "@/i18n/ar";
 import { DoctorExamPanel } from "@/components/doctor/DoctorExamPanel";
 import { loadDoctorAvailability } from "@/lib/doctor-availability.server";
+import { algiersDayBounds } from "@/lib/daily-queue";
+import { DOCTOR_EXAM_STATUSES } from "@/lib/clinic-day-tracking";
+import { formatClinicDate } from "@/lib/clinic-date";
 
 export const dynamic = "force-dynamic";
 
@@ -20,12 +23,14 @@ export default async function SpecialistDoctorDashboardPage() {
   const generalAvailability = general
     ? await loadDoctorAvailability(general.id)
     : null;
+  const { start, end } = algiersDayBounds();
 
   const waiting = doctor
     ? await prisma.waitingRoomEntry.findMany({
         where: {
           doctorId: doctor.id,
-          status: { in: ["WAITING", "WITH_DOCTOR"] },
+          status: { in: [...DOCTOR_EXAM_STATUSES] },
+          arrivedAt: { gte: start, lt: end },
         },
         include: {
           patient: { include: { account: true } },
@@ -41,7 +46,7 @@ export default async function SpecialistDoctorDashboardPage() {
     <DashboardShell items={navDoctorSpecialistAr as never} userName={user.fullName}>
       <TopHeader
         title="المعاينة"
-        subtitle="يوم العمل — المرضى في الانتظار أو قيد الجلسة الآن"
+        subtitle={`${formatClinicDate(start)} — انتظار اليوم ثم الجلسة`}
       />
       <Card>
         {waiting.length === 0 ? (

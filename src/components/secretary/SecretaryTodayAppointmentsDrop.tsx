@@ -43,22 +43,18 @@ export function SecretaryTodayAppointmentsDrop({
   csrfToken: string;
   defaultOpen?: boolean;
 }) {
-  const showMorning =
-    clinicShift === "MORNING" || clinicShift === null;
-  const showEvening =
-    clinicShift === "EVENING" || clinicShift === null;
-
-  const visibleMorning = showMorning ? morning : [];
-  const visibleEvening = showEvening ? evening : [];
+  // صباحاً: الصباحي فقط · مساءً/خارج الدوام: المتأخرون الصباحيون + المسائي
+  const visibleMorning = morning;
+  const visibleEvening = clinicShift === "MORNING" ? [] : evening;
   const total = visibleMorning.length + visibleEvening.length;
   const [open, setOpen] = useState(defaultOpen);
 
   const shiftHint =
     clinicShift === "MORNING"
-      ? `الفترة الآن: صباحي ${CLINIC_SHIFT_HOURS.MORNING.start}–${CLINIC_SHIFT_HOURS.MORNING.end}`
+      ? `الفترة الآن: صباحي ${CLINIC_SHIFT_HOURS.MORNING.start}–${CLINIC_SHIFT_HOURS.MORNING.end} — مواعيد الصباح فقط`
       : clinicShift === "EVENING"
-        ? `الفترة الآن: مسائي ${CLINIC_SHIFT_HOURS.EVENING.start}–${CLINIC_SHIFT_HOURS.EVENING.end}`
-        : "خارج أوقات الدوام — تظهر كل مواعيد اليوم";
+        ? `الفترة الآن: مسائي ${CLINIC_SHIFT_HOURS.EVENING.start}–${CLINIC_SHIFT_HOURS.EVENING.end} — المسائي + صباحي لم يُوجَّه بعد`
+        : "خارج أوقات الدوام — كل مواعيد اليوم بانتظار التوجيه";
 
   return (
     <details
@@ -103,7 +99,7 @@ export function SecretaryTodayAppointmentsDrop({
             {visibleMorning.length > 0 ? (
               <div className="space-y-2">
                 <p className="text-sm font-bold text-teal">
-                  صباحي{" "}
+                  {clinicShift === "EVENING" ? "صباحي (لم يُوجَّه بعد)" : "صباحي"}{" "}
                   <span className="font-latin tabular-nums">
                     ({toLatinDigits(visibleMorning.length)})
                   </span>

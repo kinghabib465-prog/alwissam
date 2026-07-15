@@ -514,6 +514,10 @@ export async function directPatientFromRequest(params: {
     throw new Error("تم توجيه هذا المريض مسبقًا");
   }
 
+  const { algiersDayBounds } = await import("@/lib/daily-queue");
+  const { IN_CLINIC_BUSY_STATUSES } = await import("@/lib/clinic-day-tracking");
+  const { start: dayStart, end: dayEnd } = algiersDayBounds();
+
   let patient = null as Awaited<
     ReturnType<typeof prisma.patient.findFirst>
   >;
@@ -527,6 +531,21 @@ export async function directPatientFromRequest(params: {
     patient = await prisma.patient.findFirst({
       where: { phone: phoneRaw, deletedAt: null },
     });
+  }
+
+  if (patient) {
+    const busy = await prisma.waitingRoomEntry.findFirst({
+      where: {
+        patientId: patient.id,
+        status: { in: [...IN_CLINIC_BUSY_STATUSES] },
+        arrivedAt: { gte: dayStart, lt: dayEnd },
+      },
+    });
+    if (busy) {
+      throw new Error(
+        "هذا المريض موجّه حالياً — راقبه من «الموجهون» بدل تكرار التوجيه",
+      );
+    }
   }
 
   const receptionBits = [
@@ -717,20 +736,21 @@ export async function checkInScheduledAppointment(params: {
     throw new Error("لا يمكن إدخال هذا الموعد");
   }
 
-  // لا تُدخل مريضاً لديه حضور فعّال في العيادة على موعد آخر
-  const { start: dayStart } = await import("@/lib/daily-queue").then((m) =>
-    m.algiersDayBounds(),
+  // لا تُدخل مريضاً لديه حضور فعّال في العيادة (انتظار / معاينة)
+  const { start: dayStart, end: dayEnd } = await import("@/lib/daily-queue").then(
+    (m) => m.algiersDayBounds(),
   );
+  const { IN_CLINIC_BUSY_STATUSES } = await import("@/lib/clinic-day-tracking");
   const busy = await prisma.waitingRoomEntry.findFirst({
     where: {
       patientId: appointment.patientId,
-      status: { in: ["ARRIVED", "WAITING", "WITH_DOCTOR", "SESSION_DONE"] },
-      arrivedAt: { gte: dayStart },
+      status: { in: [...IN_CLINIC_BUSY_STATUSES] },
+      arrivedAt: { gte: dayStart, lt: dayEnd },
     },
   });
   if (busy) {
     throw new Error(
-      "المريض موجود أصلاً في التوجيه/العيادة — لا حاجة لإدخاله من مواعيد اليوم",
+      "المريض موجود أصلاً في التوجيه/المعاينة — راقبه من «الموجهون»",
     );
   }
 

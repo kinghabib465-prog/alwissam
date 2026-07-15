@@ -1,24 +1,15 @@
 import { prisma } from "@/lib/db/prisma";
 import { algiersDayBounds } from "@/lib/daily-queue";
 import { DayOfWeek } from "@prisma/client";
-import {
-  currentClinicShift,
-  type ClinicShiftCode,
-} from "@/lib/clinic-shifts";
-import { periodFromStartAt, type WorkShift } from "@/lib/doctor-availability";
+import { currentClinicShift } from "@/lib/clinic-shifts";
+import { periodFromStartAt } from "@/lib/doctor-availability";
+import { IN_CLINIC_BUSY_STATUSES } from "@/lib/clinic-day-tracking";
 
-/** مواعيد تنتظر إدخال السكرتارية فقط — ليست في الانتظار/المعاينة/تمت */
+/** مواعيد تنتظر التوجيه في يومها */
 const PENDING_CHECKIN_STATUSES = [
   "CONFIRMED",
   "REMINDER_SENT",
   "DOCTOR_ASSIGNED",
-] as const;
-
-const ACTIVE_WAITING_STATUSES = [
-  "ARRIVED",
-  "WAITING",
-  "WITH_DOCTOR",
-  "SESSION_DONE",
 ] as const;
 
 const DAY_MAP: DayOfWeek[] = [
@@ -31,7 +22,6 @@ const DAY_MAP: DayOfWeek[] = [
   "SATURDAY",
 ];
 
-/** يوم الأسبوع الحالي بتوقيت الجزائر */
 export function algiersWeekday(now = new Date()): DayOfWeek {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Africa/Algiers",
@@ -46,13 +36,11 @@ export function algiersWeekday(now = new Date()): DayOfWeek {
   return DAY_MAP[idx]!;
 }
 
-export type SecretaryTodayAppointment = Awaited<
-  ReturnType<typeof listSecretaryTodayPendingCheckIns>
->["all"][number];
-
 /**
- * مواعيد اليوم بانتظار التوجيه — يوم الموعد فقط (توقيت الجزائر).
- * بدون حساب مريض — يكفي الموعد الذي حجزه الطبيب.
+ * مواعيد اليوم بانتظار التوجيه.
+ * - يوم الجزائر فقط
+ * - صف لكل موعد (ليس لكل مريض)
+ * - يستبعد من هو داخل العيادة الآن فقط
  */
 export async function listSecretaryTodayPendingCheckIns() {
   const { start, end, ymd } = algiersDayBounds();
@@ -64,7 +52,10 @@ export async function listSecretaryTodayPendingCheckIns() {
         deletedAt: null,
         startAt: { gte: start, lt: end },
         status: { in: [...PENDING_CHECKIN_STATUSES] },
-        waitingRoomEntry: { is: null },
+        OR: [
+          { waitingRoomEntry: { is: null } },
+          { waitingRoomEntry: { status: "LEFT" } },
+        ],
         patient: { deletedAt: null },
       },
       include: {
@@ -85,58 +76,48 @@ export async function listSecretaryTodayPendingCheckIns() {
     }),
     prisma.waitingRoomEntry.findMany({
       where: {
-        status: { in: [...ACTIVE_WAITING_STATUSES] },
-        arrivedAt: { gte: start },
+        status: { in: [...IN_CLINIC_BUSY_STATUSES] },
+        arrivedAt: { gte: start, lt: end },
       },
       select: { patientId: true },
     }),
   ]);
 
   const busyPatientIds = new Set(activeWaiting.map((e) => e.patientId));
-  const seenPatients = new Set<string>();
   type AptRow = (typeof appointments)[number];
   const all: AptRow[] = [];
 
   for (const apt of appointments) {
+    // مريض داخل المعاينة/الانتظار الآن — لا تُظهر موعده الثاني كـ «وصل»
     if (busyPatientIds.has(apt.patientId)) continue;
-    if (seenPatients.has(apt.patientId)) continue;
-    seenPatients.add(apt.patientId);
     all.push(apt);
   }
 
-  /** ترتيب أبجدي بالاسم لسهولة السكرتارية */
-  function byPatientName(a: AptRow, b: AptRow) {
-    return a.patient.fullName.localeCompare(b.patient.fullName, "ar", {
+  function byNameThenTime(a: AptRow, b: AptRow) {
+    const n = a.patient.fullName.localeCompare(b.patient.fullName, "ar", {
       sensitivity: "base",
     });
+    if (n !== 0) return n;
+    return a.startAt.getTime() - b.startAt.getTime();
   }
 
   const morning = all
-    .filter((a) => periodFromStartAt(a.startAt) === "MORNING")
-    .sort(byPatientName);
-  const evening = all
-    .filter((a) => periodFromStartAt(a.startAt) === "EVENING")
-    .sort(byPatientName);
-  const other = all
     .filter((a) => {
       const p = periodFromStartAt(a.startAt);
-      return p !== "MORNING" && p !== "EVENING";
+      return p === "MORNING" || p === "DAY";
     })
-    .sort(byPatientName);
-  const morningAll = [...morning, ...other];
-  all.sort(byPatientName);
+    .sort(byNameThenTime);
+  const evening = all
+    .filter((a) => periodFromStartAt(a.startAt) === "EVENING")
+    .sort(byNameThenTime);
 
-  /** القائمة الظاهرة الآن: صباح في الصباح · مساء في المساء */
-  let pending = all;
-  let activePeriod: ClinicShiftCode | WorkShift | null = clinicShift;
+  // القائمة حسب الفترة الحالية للتبسيط — مع الإبقاء على المتأخرين
+  let pending = [...morning, ...evening];
   if (clinicShift === "MORNING") {
-    pending = morningAll;
+    pending = morning;
   } else if (clinicShift === "EVENING") {
-    pending = evening;
-  } else {
-    // خارج الدوام: لا تُفرض فترة — نعرض الكل مع تسمية
-    pending = all;
-    activePeriod = null;
+    // مساءً: المسائي + أي صباحي لم يُوجَّه بعد (متأخر)
+    pending = [...morning, ...evening];
   }
 
   return {
@@ -144,11 +125,10 @@ export async function listSecretaryTodayPendingCheckIns() {
     end,
     ymd,
     clinicShift,
-    activePeriod,
-    all,
-    morning: morningAll,
+    activePeriod: clinicShift,
+    all: [...morning, ...evening],
+    morning,
     evening,
-    /** مرادف متوافق: المواعيد للعرض حسب الفترة الحالية */
     pending,
   };
 }

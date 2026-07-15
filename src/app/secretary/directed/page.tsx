@@ -9,18 +9,11 @@ import {
 } from "@/components/secretary/DirectedDoctorPicker";
 import { formatCurrencyDZD } from "@/lib/utils";
 import { DayOfWeek } from "@prisma/client";
+import { algiersDayBounds } from "@/lib/daily-queue";
+import { algiersWeekday } from "@/lib/secretary-today";
+import { formatClinicDate } from "@/lib/clinic-date";
 
 export const dynamic = "force-dynamic";
-
-const DAY_MAP: DayOfWeek[] = [
-  "SUNDAY",
-  "MONDAY",
-  "TUESDAY",
-  "WEDNESDAY",
-  "THURSDAY",
-  "FRIDAY",
-  "SATURDAY",
-];
 
 const STATUS_ORDER: Record<string, number> = {
   WITH_DOCTOR: 0,
@@ -29,13 +22,19 @@ const STATUS_ORDER: Record<string, number> = {
   SESSION_DONE: 3,
 };
 
+/** الموجهون — يوم الجزائر فقط · مسار: انتظار → معاينة → دفع/إغلاق */
 export default async function SecretaryDirectedPage() {
   const user = await requireUser(["SECRETARY", "ADMIN"]);
-  const today = DAY_MAP[new Date().getDay()]!;
+  const { start, end } = algiersDayBounds();
+  const today = algiersWeekday();
+  const todayLabel = formatClinicDate(start);
 
   const [entries, doctors] = await Promise.all([
     prisma.waitingRoomEntry.findMany({
-      where: { status: { not: "LEFT" } },
+      where: {
+        status: { not: "LEFT" },
+        arrivedAt: { gte: start, lt: end },
+      },
       include: {
         patient: true,
         doctor: { include: { user: true } },
@@ -56,7 +55,7 @@ export default async function SecretaryDirectedPage() {
       include: {
         user: true,
         workingHours: {
-          where: { isActive: true, dayOfWeek: today },
+          where: { isActive: true, dayOfWeek: today as DayOfWeek },
           take: 1,
         },
       },
@@ -64,7 +63,6 @@ export default async function SecretaryDirectedPage() {
     }),
   ]);
 
-  // الأطباء الحاضرون اليوم أولاً، ثم الباقون
   const sortedDoctors = [...doctors].sort((a, b) => {
     const aPresent = a.workingHours.length > 0 ? 0 : 1;
     const bPresent = b.workingHours.length > 0 ? 0 : 1;
@@ -93,7 +91,10 @@ export default async function SecretaryDirectedPage() {
         (e) => e.status === "WAITING" || e.status === "ARRIVED",
       ).length,
       withDoctor: list.filter((e) => e.status === "WITH_DOCTOR").length,
-      needPay: list.filter((e) => e.status === "SESSION_DONE").length,
+      needPay: list.filter(
+        (e) =>
+          e.status === "SESSION_DONE" && e.appointment.invoices.length > 0,
+      ).length,
       patients: list.map((entry, index) => {
         const inv = entry.appointment.invoices[0];
         return {
@@ -120,14 +121,14 @@ export default async function SecretaryDirectedPage() {
     <DashboardShell items={navSecretaryAr as never} userName={user.fullName}>
       <TopHeader
         title="المرضى الموجَّهون"
-        subtitle="اختر نافذة الطبيب ثم تابع مرضاه"
+        subtitle={`${todayLabel} — انتظار · معاينة · دفع ثم إغلاق الزيارة`}
       />
 
       {!hasAny && windows.every((w) => w.count === 0) ? (
         <Card>
           <EmptyState
-            title="لا مرضى موجَّهين الآن"
-            description="اضغط توجيه من الاستقبال لإرسال مريض لطبيب."
+            title="لا مرضى موجَّهين اليوم"
+            description="من «مواعيد اليوم» أو تسجيل المدخل → توجيه → يظهر هنا ليوم الجزائر فقط."
           />
         </Card>
       ) : (

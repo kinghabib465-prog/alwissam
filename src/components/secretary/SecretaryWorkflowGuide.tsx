@@ -2,7 +2,7 @@
 
 import { ChevronDown } from "lucide-react";
 
-/** مسار العيادة للسكرتارية — من الدخول حتى التوجيه والموعد */
+/** مسار العيادة للسكرتارية — تتبّع يوم واحد منطقي */
 export function SecretaryWorkflowGuide() {
   return (
     <details className="group mb-4 overflow-hidden rounded-2xl border border-border bg-white">
@@ -13,22 +13,19 @@ export function SecretaryWorkflowGuide() {
       <ol className="list-decimal space-y-2 border-t border-border px-4 py-3 pr-8 text-sm leading-relaxed text-muted">
         <li>
           <span className="font-semibold text-navy">مواعيد اليوم</span> — من حجز
-          لهم الطبيب (بدون فتح حساب) ووصل يوم موعدهم: الصباح في الصباح والمساء
-          في المساء — وجّهيهم للطبيب من القائمة المنسدلة.
+          لهم الطبيب ووصل يومهم: وجّهي للطبيب. الصباح صباحاً · مساءً يظهر
+          المسائي + أي صباحي لم يأتِ بعد.
         </li>
         <li>
           <span className="font-semibold text-navy">تسجيل عند المدخل</span> —
-          مريض بدون موعد أو تسجيل من الموقع: أكملي البيانات (سكن · مرض · سبب
-          الزيارة · أول زيارة).
+          بدون موعد / من الموقع → أكملي البيانات ثم وجّهي.
         </li>
         <li>
-          <span className="font-semibold text-navy">توجيه</span> — اختاري الطبيب
-          (صباحي/مسائي حسب دوامه) ثم أكّدي؛ يظهر في «الموجهون».
+          <span className="font-semibold text-navy">الموجهون</span> — انتظار →
+          عند الطبيب → بعد المعاينة: ادفعِ أو أغلقي الزيارة. قائمة اليوم فقط.
         </li>
         <li>
-          بعد المعاينة:{" "}
-          <span className="font-semibold text-navy">الدفع</span> إن لزم، والطبيب
-          يحجز الموعد القادم من «مرضاي».
+          الطبيب يحجز القادم من مرضاي بدون فتح حساب — يظهر هنا يوم الموعد.
         </li>
       </ol>
       <p className="border-t border-border px-4 py-2 text-xs text-muted">

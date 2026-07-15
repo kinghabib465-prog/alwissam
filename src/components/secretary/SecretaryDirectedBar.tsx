@@ -38,6 +38,8 @@ export function SecretaryDirectedBar({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const canRemove = status === "WAITING" || status === "ARRIVED";
+  const needsPay = status === "SESSION_DONE" && !!unpaidInvoiceId;
+  const canCloseVisit = status === "SESSION_DONE" && !unpaidInvoiceId;
 
   async function remove() {
     if (!confirm("حذف المريض من الانتظار؟ (لم يدخل عند الطبيب)")) return;
@@ -55,6 +57,27 @@ export function SecretaryDirectedBar({
     setLoading(false);
     if (!res.ok) {
       setError(data.error || "فشل الحذف");
+      return;
+    }
+    router.refresh();
+  }
+
+  async function closeVisit() {
+    if (!confirm("إغلاق الزيارة؟ (لا فاتورة معلقة)")) return;
+    setLoading(true);
+    setError("");
+    const res = await fetch(`/api/secretary/waiting-room/${entryId}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-csrf-token": csrfToken,
+      },
+      body: JSON.stringify({ action: "close_visit" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setLoading(false);
+    if (!res.ok) {
+      setError(data.error || "فشل الإغلاق");
       return;
     }
     router.refresh();
@@ -81,12 +104,22 @@ export function SecretaryDirectedBar({
             {amountLabel}
           </span>
         )}
-        {unpaidInvoiceId ? (
+        {needsPay ? (
           <Link href={`/secretary/payments?invoice=${unpaidInvoiceId}`}>
             <Button size="sm" variant="secondary">
               دفع
             </Button>
           </Link>
+        ) : null}
+        {canCloseVisit ? (
+          <Button
+            size="sm"
+            variant="teal"
+            loading={loading}
+            onClick={closeVisit}
+          >
+            إغلاق الزيارة
+          </Button>
         ) : null}
         {canRemove && (
           <Button

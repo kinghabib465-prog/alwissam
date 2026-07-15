@@ -93,7 +93,9 @@ export async function POST(req: NextRequest) {
       await tx.waitingRoomEntry.update({
         where: { id: entryId },
         data: {
-          status: "SESSION_DONE",
+          // مغطى = انتهت الزيارة بلا دفع → تخرج من التتبع فوراً
+          // غير مغطى = تنتظر الدفع عند السكرتارية
+          status: covered ? "LEFT" : "SESSION_DONE",
           completedAt: new Date(),
           note: covered
             ? note || "مغطى — بدون دفع فوري"
@@ -104,7 +106,7 @@ export async function POST(req: NextRequest) {
       await tx.appointment.update({
         where: { id: entry.appointmentId },
         data: {
-          status: "FOLLOW_UP_REQUIRED",
+          status: covered ? "COMPLETED" : "FOLLOW_UP_REQUIRED",
           notes: [
             entry.appointment.notes,
             covered
@@ -116,9 +118,11 @@ export async function POST(req: NextRequest) {
           statusHistory: {
             create: {
               previousStatus: entry.appointment.status,
-              newStatus: "FOLLOW_UP_REQUIRED",
+              newStatus: covered ? "COMPLETED" : "FOLLOW_UP_REQUIRED",
               changedById: user.id,
-              reason: `إنهاء المعاينة بواسطة ${user.fullName}`,
+              reason: covered
+                ? `إنهاء معاينة مغطاة بواسطة ${user.fullName}`
+                : `إنهاء المعاينة بواسطة ${user.fullName}`,
               note,
             },
           },
@@ -155,12 +159,15 @@ export async function POST(req: NextRequest) {
       reason: `إرسال مبلغ الدفع للسكرتارية بواسطة ${user.fullName}`,
     });
 
-    await publishEvent("clinic:waiting-room", { id: entryId, status: "SESSION_DONE" });
+    await publishEvent("clinic:waiting-room", {
+      id: entryId,
+      status: covered ? "LEFT" : "SESSION_DONE",
+    });
 
     return NextResponse.json({
       ok: true,
       message: covered
-        ? "تم إنهاء المعاينة بدون مبلغ فوري"
+        ? "انتهت الزيارة (مغطى) — لا تنتظر عند السكرتارية"
         : "تم إرسال المبلغ للسكرتارية",
       invoiceId,
     });
