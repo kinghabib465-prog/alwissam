@@ -3,9 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { FormField, Input } from "@/components/ui/Form";
+import { FormField, Input, Select } from "@/components/ui/Form";
+import { VISIT_REASONS, visitReasonLabel } from "@/lib/visit-reasons";
 
-/** تسجيل عند المدخل — الاسم · الهاتف · العمر · السكن · المرض · أول زيارة */
+/** تسجيل عند المدخل — مع سبب الزيارة */
 export function SecretaryWalkInForm({ csrfToken }: { csrfToken: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -17,6 +18,7 @@ export function SecretaryWalkInForm({ csrfToken }: { csrfToken: string }) {
     age: "",
     city: "",
     chronicIllnesses: "",
+    appointmentType: "GENERAL_EXAM",
     isFirstVisit: true,
   });
 
@@ -36,6 +38,9 @@ export function SecretaryWalkInForm({ csrfToken }: { csrfToken: string }) {
         age: form.age ? Number(form.age) : undefined,
         city: form.city || undefined,
         chronicIllnesses: form.chronicIllnesses || undefined,
+        appointmentType: form.appointmentType,
+        reason: visitReasonLabel(form.appointmentType),
+        isEmergency: form.appointmentType === "EMERGENCY",
         isFirstVisit: form.isFirstVisit,
       }),
     });
@@ -51,6 +56,7 @@ export function SecretaryWalkInForm({ csrfToken }: { csrfToken: string }) {
       age: "",
       city: "",
       chronicIllnesses: "",
+      appointmentType: "GENERAL_EXAM",
       isFirstVisit: true,
     });
     setOpen(false);
@@ -90,6 +96,21 @@ export function SecretaryWalkInForm({ csrfToken }: { csrfToken: string }) {
           required
           minLength={8}
         />
+      </FormField>
+      <FormField label="سبب الزيارة">
+        <Select
+          value={form.appointmentType}
+          onChange={(e) =>
+            setForm({ ...form, appointmentType: e.target.value })
+          }
+          required
+        >
+          {VISIT_REASONS.map((r) => (
+            <option key={r.value} value={r.value}>
+              {r.label}
+            </option>
+          ))}
+        </Select>
       </FormField>
       <div className="grid gap-3 sm:grid-cols-2">
         <FormField label="العمر">

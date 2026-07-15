@@ -54,11 +54,20 @@ export default async function SecretaryDashboardPage() {
 
   const present = doctors.filter((d) => d.workingHours.length > 0);
   const doctorSource = present.length > 0 ? present : doctors;
-  const doctorOpts = doctorSource.map((d) => ({
-    id: d.id,
-    name: d.user.fullName,
-    type: d.type,
-  }));
+  // طبيب واحد لكل اسم — يزيل تكرار منانة إن بقي نشطاً مؤقتاً
+  const seenNames = new Set<string>();
+  const doctorOpts = doctorSource
+    .map((d) => ({
+      id: d.id,
+      name: d.user.fullName,
+      type: d.type,
+    }))
+    .filter((d) => {
+      const key = d.name.replace(/\s+/g, "").toLowerCase();
+      if (seenNames.has(key)) return false;
+      seenNames.add(key);
+      return true;
+    });
 
   return (
     <DashboardShell items={navSecretaryAr as never} userName={user.fullName}>

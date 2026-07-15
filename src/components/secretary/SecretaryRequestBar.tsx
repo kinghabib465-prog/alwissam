@@ -8,6 +8,7 @@ import { FormField, Input, Select } from "@/components/ui/Form";
 import { splitPatientName } from "@/lib/patient-name";
 import { toLatinDigits } from "@/lib/latin-digits";
 import { appointmentTypeAr } from "@/i18n/ar";
+import { VISIT_REASONS, visitReasonLabel } from "@/lib/visit-reasons";
 
 type DoctorOpt = { id: string; name: string; type: string };
 
@@ -54,11 +55,13 @@ export function SecretaryRequestBar({
     age: age != null ? String(age) : "",
     city: city || "",
     chronicIllnesses: chronicIllnesses || "",
+    appointmentType: appointmentType || "GENERAL_EXAM",
     isFirstVisit: !isPreviousPatient,
   });
 
   const { firstName, lastName } = splitPatientName(form.fullName);
   const typeLabel =
+    visitReasonLabel(form.appointmentType) ||
     (appointmentType && appointmentTypeAr[appointmentType]) ||
     reason ||
     "";
@@ -91,6 +94,8 @@ export function SecretaryRequestBar({
       age: form.age.trim() === "" ? null : Number(form.age),
       city: form.city,
       chronicIllnesses: form.chronicIllnesses,
+      appointmentType: form.appointmentType,
+      reason: visitReasonLabel(form.appointmentType),
       isFirstVisit: form.isFirstVisit,
     });
     if (!data) return;
@@ -134,7 +139,7 @@ export function SecretaryRequestBar({
             </p>
             <p className="text-xs text-muted">
               {typeLabel ? `${typeLabel} · ` : ""}
-              {open ? "إخفاء التفاصيل" : "تعديل المعلومات · السكن · المرض"}
+              {open ? "إخفاء التفاصيل" : "تعديل المعلومات · سبب الزيارة"}
             </p>
           </div>
         </button>
@@ -197,6 +202,20 @@ export function SecretaryRequestBar({
               />
             </FormField>
           </div>
+          <FormField label="سبب الزيارة">
+            <Select
+              value={form.appointmentType}
+              onChange={(e) =>
+                setForm({ ...form, appointmentType: e.target.value })
+              }
+            >
+              {VISIT_REASONS.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </Select>
+          </FormField>
           <FormField label="مرض تعاني منه">
             <Input
               value={form.chronicIllnesses}

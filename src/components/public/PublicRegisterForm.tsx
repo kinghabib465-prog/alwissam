@@ -4,28 +4,11 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { FormField, Input, Select } from "@/components/ui/Form";
 import { appointmentTypeAr } from "@/i18n/ar";
-
-const visitReasons = [
-  { value: "EMERGENCY", label: "حالة استعجالية (أورجونص)" },
-  { value: "TOOTHACHE", label: "ألم أسنان" },
-  { value: "GENERAL_EXAM", label: "فحص عام" },
-  { value: "CLEANING", label: "تنظيف" },
-  { value: "FILLING", label: "حشو" },
-  { value: "EXTRACTION", label: "نزع سن" },
-  { value: "ROOT_CANAL", label: "علاج عصب" },
-  { value: "ORTHO_CONSULT", label: "استشارة تقويم" },
-  { value: "ORTHO_FOLLOWUP", label: "متابعة تقويم" },
-  { value: "PROSTHETICS", label: "تركيب أسنان" },
-  { value: "SURGERY_CONSULT", label: "استشارة جراحية" },
-  { value: "SURGERY", label: "عملية" },
-  { value: "POST_OP_FOLLOWUP", label: "متابعة بعد العملية" },
-  { value: "LASER_WHITENING", label: "تبييض الأسنان بالليزر" },
-  { value: "OTHER", label: "أخرى" },
-] as const;
+import { VISIT_REASONS } from "@/lib/visit-reasons";
 
 /** نموذج التسجيل عند المدخل — يُستخدم في الرئيسية */
 export function PublicRegisterForm() {
-  const reasons = useMemo(() => visitReasons, []);
+  const reasons = useMemo(() => VISIT_REASONS, []);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<{
     message: string;

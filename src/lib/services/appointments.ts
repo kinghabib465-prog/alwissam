@@ -215,6 +215,8 @@ export async function updateReceptionRequestInfo(params: {
   age?: number | null;
   city?: string | null;
   chronicIllnesses?: string | null;
+  appointmentType?: AppointmentType;
+  reason?: string | null;
   isFirstVisit?: boolean;
 }) {
   const existing = await prisma.appointmentRequest.findUnique({
@@ -241,6 +243,15 @@ export async function updateReceptionRequestInfo(params: {
     throw new Error("رقم الهاتف غير صالح");
   }
 
+  const nextType = params.appointmentType ?? existing.appointmentType;
+  const service = await prisma.service.findUnique({
+    where: { code: nextType },
+  });
+  const nextReason =
+    params.reason !== undefined
+      ? params.reason?.trim() || service?.nameAr || existing.reason
+      : existing.reason;
+
   const updated = await prisma.appointmentRequest.update({
     where: { id: params.requestId },
     data: {
@@ -264,20 +275,30 @@ export async function updateReceptionRequestInfo(params: {
           : params.chronicIllnesses !== undefined
             ? params.chronicIllnesses.trim() || null
             : existing.chronicIllnesses,
+      appointmentType: nextType,
+      serviceId: service?.id ?? existing.serviceId,
+      reason: nextReason,
+      isEmergency: nextType === "EMERGENCY" || existing.isEmergency,
       isPreviousPatient:
         params.isFirstVisit !== undefined
           ? !params.isFirstVisit
           : existing.isPreviousPatient,
       status:
         existing.status === "NEW_REQUEST"
-          ? "UNDER_SECRETARY_REVIEW"
-          : existing.status,
+          ? nextType === "EMERGENCY"
+            ? "EMERGENCY"
+            : "UNDER_SECRETARY_REVIEW"
+          : nextType === "EMERGENCY" && existing.status !== "EMERGENCY"
+            ? "EMERGENCY"
+            : existing.status,
       statusHistory: {
         create: {
           previousStatus: existing.status,
           newStatus:
             existing.status === "NEW_REQUEST"
-              ? "UNDER_SECRETARY_REVIEW"
+              ? nextType === "EMERGENCY"
+                ? "EMERGENCY"
+                : "UNDER_SECRETARY_REVIEW"
               : existing.status,
           changedById: params.userId,
           reason: `تحديث بيانات الاستقبال بواسطة ${params.userName}`,
@@ -297,12 +318,14 @@ export async function updateReceptionRequestInfo(params: {
       phone: existing.phone,
       city: existing.city,
       chronicIllnesses: existing.chronicIllnesses,
+      appointmentType: existing.appointmentType,
     },
     newValue: {
       fullName: updated.fullName,
       phone: updated.phone,
       city: updated.city,
       chronicIllnesses: updated.chronicIllnesses,
+      appointmentType: updated.appointmentType,
       isPreviousPatient: updated.isPreviousPatient,
     },
     reason: `تحديث بيانات الاستقبال بواسطة ${params.userName}`,

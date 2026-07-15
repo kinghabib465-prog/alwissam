@@ -210,6 +210,33 @@ export async function ensureStaff() {
       },
     });
 
+    // إزالة تكرار «منانة» إن وُجد حساب طبيب مكرر من seed قديم
+    const mananaDupes = await prisma.doctor.findMany({
+      where: {
+        id: { not: specialist.id },
+        isActive: true,
+        OR: [
+          { user: { fullName: { contains: "منانة" } } },
+          { user: { email: { contains: "manana", mode: "insensitive" } } },
+        ],
+      },
+      include: { user: { select: { id: true, email: true, fullName: true } } },
+    });
+    for (const dup of mananaDupes) {
+      // لا تمس طبيباً آخر ليس منانة — التصفية أعلاه كافية
+      console.warn(
+        `[ensure-staff] deactivating duplicate Manana doctor ${dup.id} (${dup.user.email})`,
+      );
+      await prisma.doctor.update({
+        where: { id: dup.id },
+        data: { isActive: false },
+      });
+      await prisma.user.update({
+        where: { id: dup.userId },
+        data: { status: "INACTIVE", deletedAt: new Date() },
+      });
+    }
+
     const generalPassword = await bcrypt.hash(
       env("SEED_DOCTOR_GENERAL_PASSWORD"),
       12,

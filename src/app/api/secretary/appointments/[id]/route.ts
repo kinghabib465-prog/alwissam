@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AppointmentType } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import {
   directPatientFromRequest,
@@ -34,6 +35,16 @@ export async function POST(
         age = Number.isFinite(n) ? n : undefined;
       }
 
+      const typeRaw =
+        body.appointmentType !== undefined
+          ? String(body.appointmentType)
+          : undefined;
+      const appointmentType =
+        typeRaw &&
+        Object.values(AppointmentType).includes(typeRaw as AppointmentType)
+          ? (typeRaw as AppointmentType)
+          : undefined;
+
       const updated = await updateReceptionRequestInfo({
         requestId: id,
         userId: user.id,
@@ -48,6 +59,8 @@ export async function POST(
           body.chronicIllnesses !== undefined
             ? String(body.chronicIllnesses)
             : undefined,
+        appointmentType,
+        reason: body.reason !== undefined ? String(body.reason) : undefined,
         isFirstVisit:
           body.isFirstVisit === undefined
             ? undefined
@@ -63,6 +76,8 @@ export async function POST(
           age: updated.age,
           city: updated.city,
           chronicIllnesses: updated.chronicIllnesses,
+          appointmentType: updated.appointmentType,
+          reason: updated.reason,
           isPreviousPatient: updated.isPreviousPatient,
         },
       });

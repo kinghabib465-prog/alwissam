@@ -51,8 +51,10 @@ export async function POST(req: NextRequest) {
     age: Number.isFinite(age) ? age : undefined,
     city: city || undefined,
     chronicIllnesses: chronicIllnesses || undefined,
-    reason: reason || "تسجيل عند الوصول — السكرتارية",
+    reason: reason || undefined,
     appointmentType,
+    isEmergency:
+      body.isEmergency === true || appointmentType === AppointmentType.EMERGENCY,
     isPreviousPatient: !isFirstVisit,
     consentAccepted: true,
     additionalNotes: `سجّله السكرتير ${user.fullName}`,
