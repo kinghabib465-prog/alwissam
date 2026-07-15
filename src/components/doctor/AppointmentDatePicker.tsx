@@ -144,7 +144,9 @@ export function AppointmentDatePicker({
           className={`mt-3 text-lg font-bold ${dayOk ? "text-navy" : "text-danger"}`}
           data-numeric="true"
         >
-          {display}
+          <span className="font-latin tabular-nums">
+            {toLatinDigits(display)}
+          </span>
           {dayOnly && activeShift && activeShift !== "DAY"
             ? ` — ${SHIFT_LABEL_AR[activeShift]}`
             : ""}
@@ -205,7 +207,7 @@ export function AppointmentDatePicker({
                   className="font-latin"
                   onClick={() => onTimeChange?.(t)}
                 >
-                  {t}
+                  {toLatinDigits(t)}
                 </Button>
               ))
             )}

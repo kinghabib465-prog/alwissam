@@ -14,13 +14,14 @@ const NUMERIC_TYPES = new Set([
 export const Input = forwardRef<
   HTMLInputElement,
   React.InputHTMLAttributes<HTMLInputElement>
->(({ className, type = "text", lang, inputMode, ...props }, ref) => {
+>(({ className, type = "text", lang, dir, inputMode, ...props }, ref) => {
   const isNumeric = NUMERIC_TYPES.has(type);
   return (
     <input
       ref={ref}
       type={type}
       lang={lang ?? (isNumeric ? "en" : undefined)}
+      dir={dir ?? (isNumeric ? "ltr" : undefined)}
       inputMode={
         inputMode ??
         (type === "number" || type === "tel" ? "numeric" : undefined)

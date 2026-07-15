@@ -344,7 +344,7 @@ export function DoctorPatientCard({
             {patient.nextLabel ? (
               <span>
                 الموعد:{" "}
-                <span className="font-semibold text-teal">
+                <span className="font-latin font-semibold tabular-nums text-teal">
                   {toLatinDigits(patient.nextLabel)}
                 </span>
               </span>
@@ -352,7 +352,7 @@ export function DoctorPatientCard({
               <span>بدون موعد</span>
             )}
             <span aria-hidden>·</span>
-            <span className="font-latin">
+            <span className="font-latin tabular-nums">
               {toLatinDigits(patient.sessionsCount)} حصص
             </span>
             {finance && finance.remaining > 0 ? (
@@ -473,7 +473,7 @@ export function DoctorPatientCard({
                     )}
                     <div className="sm:col-span-2">
                       <dt className="text-xs text-muted">الموعد القادم</dt>
-                      <dd className="font-semibold text-teal">
+                      <dd className="font-latin font-semibold tabular-nums text-teal">
                         {patient.nextLabel
                           ? toLatinDigits(patient.nextLabel)
                           : "غير محدد"}

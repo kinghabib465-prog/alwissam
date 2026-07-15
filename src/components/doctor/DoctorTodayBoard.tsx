@@ -61,6 +61,18 @@ const ORDER: TodaySectionKey[] = [
   "done",
 ];
 
+function sortByPeriod(items: TodayAptView[]) {
+  return [...items].sort((a, b) => {
+    const pa = periodFromStartAt(a.startAtIso);
+    const pb = periodFromStartAt(b.startAtIso);
+    const rank = (s: string) =>
+      s === "MORNING" ? 0 : s === "DAY" ? 1 : 2;
+    const d = rank(pa) - rank(pb);
+    if (d !== 0) return d;
+    return a.startAtIso.localeCompare(b.startAtIso);
+  });
+}
+
 function PatientRow({
   apt,
   index,
@@ -69,11 +81,12 @@ function PatientRow({
   index: number;
 }) {
   const { firstName, lastName } = splitPatientName(apt.patientName);
+  const period = periodFromStartAt(apt.startAtIso);
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-border/80 bg-white px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-center gap-3">
-        <span className="font-latin flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-soft-teal text-sm font-bold text-teal">
+        <span className="font-latin flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-soft-teal text-sm font-bold tabular-nums text-teal">
           {toLatinDigits(index + 1)}
         </span>
         <div className="min-w-0">
@@ -84,13 +97,11 @@ function PatientRow({
             ) : null}
           </p>
           <p className="mt-0.5 text-xs text-muted">
-            <span className="font-bold text-teal">
-              {SHIFT_LABEL_AR[periodFromStartAt(apt.startAtIso)]}
-            </span>
+            <span className="font-bold text-teal">{SHIFT_LABEL_AR[period]}</span>
             {" · "}
             {apt.typeLabel}
             {" · "}
-            <span className="font-latin">
+            <span className="font-latin tabular-nums">
               {toLatinDigits(apt.phone || "—")}
             </span>
           </p>
@@ -114,6 +125,40 @@ function CollapsibleSection({
 }) {
   if (items.length === 0) return null;
   const meta = SECTION_META[sectionKey];
+  const ordered = sortByPeriod(items);
+  const morning = ordered.filter(
+    (a) => periodFromStartAt(a.startAtIso) === "MORNING",
+  );
+  const evening = ordered.filter(
+    (a) => periodFromStartAt(a.startAtIso) === "EVENING",
+  );
+  const other = ordered.filter((a) => {
+    const p = periodFromStartAt(a.startAtIso);
+    return p !== "MORNING" && p !== "EVENING";
+  });
+
+  let counter = 0;
+  function renderGroup(title: string | null, list: TodayAptView[]) {
+    if (list.length === 0) return null;
+    return (
+      <div className="space-y-2">
+        {title ? (
+          <p className="text-xs font-bold text-teal">
+            {title}{" "}
+            <span className="font-latin tabular-nums">
+              ({toLatinDigits(list.length)})
+            </span>
+          </p>
+        ) : null}
+        {list.map((apt) => {
+          counter += 1;
+          return <PatientRow key={apt.id} apt={apt} index={counter} />;
+        })}
+      </div>
+    );
+  }
+
+  const splitByShift = morning.length > 0 && evening.length > 0;
 
   return (
     <section className="overflow-hidden rounded-2xl border border-border bg-white">
@@ -131,7 +176,7 @@ function CollapsibleSection({
         >
           {meta.title}
         </span>
-        <span className="font-latin text-sm font-bold text-navy">
+        <span className="font-latin text-sm font-bold tabular-nums text-navy">
           {toLatinDigits(items.length)}
         </span>
         <span className="hidden flex-1 truncate text-xs text-muted sm:block">
@@ -145,11 +190,19 @@ function CollapsibleSection({
         />
       </button>
       {open && (
-        <div className="space-y-2 border-t border-border px-3 py-3">
+        <div className="space-y-3 border-t border-border px-3 py-3">
           <p className="text-xs text-muted sm:hidden">{meta.hint}</p>
-          {items.map((apt, index) => (
-            <PatientRow key={apt.id} apt={apt} index={index} />
-          ))}
+          {splitByShift ? (
+            <>
+              {renderGroup("صباحي", morning)}
+              {renderGroup("مسائي", evening)}
+              {renderGroup(null, other)}
+            </>
+          ) : (
+            ordered.map((apt, index) => (
+              <PatientRow key={apt.id} apt={apt} index={index + 1} />
+            ))
+          )}
         </div>
       )}
     </section>

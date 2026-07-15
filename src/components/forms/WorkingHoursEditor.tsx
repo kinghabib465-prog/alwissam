@@ -32,13 +32,16 @@ const DEFAULT_EVENING = {
   isActive: false,
 };
 
+function latinTime(value: string) {
+  return toLatinDigits(value || "");
+}
+
 function buildDayState(initialHours: HourRow[]): DayShiftState[] {
   return DAYS_ORDER.map((day) => {
     const morning =
       initialHours.find(
         (h) => h.dayOfWeek === day && h.shift === "MORNING",
       ) ||
-      // دعم قديم: دوام DAY يُعرض كصباحي
       initialHours.find((h) => h.dayOfWeek === day && h.shift === "DAY");
     const evening = initialHours.find(
       (h) => h.dayOfWeek === day && h.shift === "EVENING",
@@ -47,15 +50,15 @@ function buildDayState(initialHours: HourRow[]): DayShiftState[] {
       dayOfWeek: day,
       morning: morning
         ? {
-            startTime: morning.startTime || DEFAULT_MORNING.startTime,
-            endTime: morning.endTime || DEFAULT_MORNING.endTime,
+            startTime: latinTime(morning.startTime || DEFAULT_MORNING.startTime),
+            endTime: latinTime(morning.endTime || DEFAULT_MORNING.endTime),
             isActive: !!morning.isActive,
           }
         : { ...DEFAULT_MORNING },
       evening: evening
         ? {
-            startTime: evening.startTime || DEFAULT_EVENING.startTime,
-            endTime: evening.endTime || DEFAULT_EVENING.endTime,
+            startTime: latinTime(evening.startTime || DEFAULT_EVENING.startTime),
+            endTime: latinTime(evening.endTime || DEFAULT_EVENING.endTime),
             isActive: !!evening.isActive,
           }
         : { ...DEFAULT_EVENING },
@@ -63,7 +66,68 @@ function buildDayState(initialHours: HourRow[]): DayShiftState[] {
   });
 }
 
-/** محرر دوام مخصص: لكل يوم صباحي + مسائي منفصلان */
+function ShiftBlock({
+  label,
+  active,
+  startTime,
+  endTime,
+  onToggle,
+  onStart,
+  onEnd,
+}: {
+  label: string;
+  active: boolean;
+  startTime: string;
+  endTime: string;
+  onToggle: (v: boolean) => void;
+  onStart: (v: string) => void;
+  onEnd: (v: string) => void;
+}) {
+  return (
+    <div
+      className={`rounded-xl border bg-white p-2.5 transition ${
+        active ? "border-teal/40 ring-1 ring-teal/20" : "border-border opacity-80"
+      }`}
+    >
+      <label className="mb-2 flex cursor-pointer items-center gap-2">
+        <input
+          type="checkbox"
+          checked={active}
+          onChange={(e) => onToggle(e.target.checked)}
+        />
+        <span className="text-sm font-bold text-navy">{label}</span>
+      </label>
+      <div className="flex flex-wrap items-center gap-1.5" dir="ltr">
+        <Input
+          className="font-latin h-9 w-[5.75rem] px-2 text-center"
+          type="time"
+          lang="en"
+          value={startTime}
+          disabled={!active}
+          onChange={(e) => onStart(latinTime(e.target.value))}
+        />
+        <span className="text-xs text-muted">–</span>
+        <Input
+          className="font-latin h-9 w-[5.75rem] px-2 text-center"
+          type="time"
+          lang="en"
+          value={endTime}
+          disabled={!active}
+          onChange={(e) => onEnd(latinTime(e.target.value))}
+        />
+      </div>
+      {active ? (
+        <p className="font-latin mt-1.5 text-[11px] tabular-nums text-teal">
+          {latinTime(startTime)} – {latinTime(endTime)}
+        </p>
+      ) : (
+        <p className="mt-1.5 text-[11px] text-muted">متوقف</p>
+      )}
+    </div>
+  );
+}
+
+/** محرر دوام منظم: لكل يوم صباحي + مسائي — ساعات بأرقام غربية */
 export function WorkingHoursEditor({
   csrfToken,
   doctorId,
@@ -74,7 +138,6 @@ export function WorkingHoursEditor({
   doctorId: string;
   doctorName: string;
   initialHours: HourRow[];
-  /** مهمل — يُحفظ للتوافق مع الاستدعاءات القديمة */
   defaultShift?: string;
 }) {
   const router = useRouter();
@@ -85,22 +148,27 @@ export function WorkingHoursEditor({
     buildDayState(initialHours),
   );
 
-  const summary = useMemo(() => {
-    const parts: string[] = [];
-    for (const d of days) {
-      const label = dayOfWeekAr[d.dayOfWeek] || d.dayOfWeek;
-      if (d.morning.isActive) {
-        parts.push(
-          `${label} صباح ${toLatinDigits(d.morning.startTime)}–${toLatinDigits(d.morning.endTime)}`,
-        );
-      }
-      if (d.evening.isActive) {
-        parts.push(
-          `${label} مساء ${toLatinDigits(d.evening.startTime)}–${toLatinDigits(d.evening.endTime)}`,
-        );
-      }
-    }
-    return parts;
+  const summaryRows = useMemo(() => {
+    return days
+      .map((d) => {
+        const parts: string[] = [];
+        if (d.morning.isActive) {
+          parts.push(
+            `صباح ${latinTime(d.morning.startTime)}–${latinTime(d.morning.endTime)}`,
+          );
+        }
+        if (d.evening.isActive) {
+          parts.push(
+            `مساء ${latinTime(d.evening.startTime)}–${latinTime(d.evening.endTime)}`,
+          );
+        }
+        if (parts.length === 0) return null;
+        return {
+          day: dayOfWeekAr[d.dayOfWeek] || d.dayOfWeek,
+          text: parts.join(" · "),
+        };
+      })
+      .filter(Boolean) as { day: string; text: string }[];
   }, [days]);
 
   function patchDay(
@@ -146,18 +214,17 @@ export function WorkingHoursEditor({
       hours.push({
         dayOfWeek: d.dayOfWeek,
         shift: "MORNING",
-        startTime: d.morning.startTime,
-        endTime: d.morning.endTime,
+        startTime: latinTime(d.morning.startTime),
+        endTime: latinTime(d.morning.endTime),
         isActive: d.morning.isActive,
       });
       hours.push({
         dayOfWeek: d.dayOfWeek,
         shift: "EVENING",
-        startTime: d.evening.startTime,
-        endTime: d.evening.endTime,
+        startTime: latinTime(d.evening.startTime),
+        endTime: latinTime(d.evening.endTime),
         isActive: d.evening.isActive,
       });
-      // تعطيل دوام DAY القديم إن وُجد
       hours.push({
         dayOfWeek: d.dayOfWeek,
         shift: "DAY",
@@ -193,106 +260,81 @@ export function WorkingHoursEditor({
     <div className="rounded-2xl border border-border p-4">
       <p className="mb-1 font-bold text-navy">{doctorName}</p>
       <p className="mb-3 text-xs text-muted">
-        لكل يوم: صباحي ({DEFAULT_MORNING.startTime}–{DEFAULT_MORNING.endTime})
-      و/أو مسائي ({DEFAULT_EVENING.startTime}–{DEFAULT_EVENING.endTime}) —
-      عدّلي الساعات حسب جدول الطبيب
+        جدول منظم لكل يوم — فعّل صباحي و/أو مسائي وعدّل الساعات
+        <span className="font-latin mx-1 tabular-nums text-teal">
+          ({latinTime(DEFAULT_MORNING.startTime)}–{latinTime(DEFAULT_MORNING.endTime)}
+          {" · "}
+          {latinTime(DEFAULT_EVENING.startTime)}–{latinTime(DEFAULT_EVENING.endTime)})
+        </span>
       </p>
 
-      <div className="mb-2 hidden grid-cols-[7rem_1fr_1fr] gap-2 text-xs font-bold text-muted sm:grid">
+      <div className="mb-2 hidden grid-cols-[6.5rem_1fr_1fr] gap-2 px-1 text-xs font-bold text-muted sm:grid">
         <span>اليوم</span>
-        <span className="text-center">صباحي</span>
-        <span className="text-center">مسائي</span>
+        <span>صباحي</span>
+        <span>مسائي</span>
       </div>
 
-      <div className="space-y-3">
-        {days.map((d) => (
+      <div className="space-y-2.5">
+        {days.map((d, index) => (
           <div
             key={d.dayOfWeek}
-            className="grid gap-2 rounded-xl border border-border/80 bg-[#F8FBFC] p-2.5 sm:grid-cols-[7rem_1fr_1fr] sm:items-center"
+            className="grid gap-2 rounded-2xl border border-border/80 bg-[#F8FBFC] p-2.5 sm:grid-cols-[6.5rem_1fr_1fr] sm:items-start"
           >
-            <p className="text-sm font-bold text-navy">
-              {dayOfWeekAr[d.dayOfWeek]}
-            </p>
+            <div className="flex items-center gap-2 sm:pt-2">
+              <span className="font-latin flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-xs font-bold text-teal ring-1 ring-border">
+                {toLatinDigits(index + 1)}
+              </span>
+              <p className="text-sm font-bold text-navy">
+                {dayOfWeekAr[d.dayOfWeek]}
+              </p>
+            </div>
 
-            <label className="flex flex-wrap items-center gap-2 rounded-xl bg-white px-2 py-2 text-sm ring-1 ring-border">
-              <input
-                type="checkbox"
-                checked={d.morning.isActive}
-                onChange={(e) =>
-                  patchDay(d.dayOfWeek, "morning", {
-                    isActive: e.target.checked,
-                  })
-                }
-              />
-              <span className="font-semibold text-teal sm:hidden">صباح</span>
-              <Input
-                className="font-latin h-9 w-[5.5rem]"
-                type="time"
-                value={d.morning.startTime}
-                disabled={!d.morning.isActive}
-                onChange={(e) =>
-                  patchDay(d.dayOfWeek, "morning", {
-                    startTime: e.target.value,
-                  })
-                }
-              />
-              <span className="text-xs text-muted">إلى</span>
-              <Input
-                className="font-latin h-9 w-[5.5rem]"
-                type="time"
-                value={d.morning.endTime}
-                disabled={!d.morning.isActive}
-                onChange={(e) =>
-                  patchDay(d.dayOfWeek, "morning", {
-                    endTime: e.target.value,
-                  })
-                }
-              />
-            </label>
+            <ShiftBlock
+              label="صباحي"
+              active={d.morning.isActive}
+              startTime={d.morning.startTime}
+              endTime={d.morning.endTime}
+              onToggle={(v) =>
+                patchDay(d.dayOfWeek, "morning", { isActive: v })
+              }
+              onStart={(v) =>
+                patchDay(d.dayOfWeek, "morning", { startTime: v })
+              }
+              onEnd={(v) => patchDay(d.dayOfWeek, "morning", { endTime: v })}
+            />
 
-            <label className="flex flex-wrap items-center gap-2 rounded-xl bg-white px-2 py-2 text-sm ring-1 ring-border">
-              <input
-                type="checkbox"
-                checked={d.evening.isActive}
-                onChange={(e) =>
-                  patchDay(d.dayOfWeek, "evening", {
-                    isActive: e.target.checked,
-                  })
-                }
-              />
-              <span className="font-semibold text-teal sm:hidden">مساء</span>
-              <Input
-                className="font-latin h-9 w-[5.5rem]"
-                type="time"
-                value={d.evening.startTime}
-                disabled={!d.evening.isActive}
-                onChange={(e) =>
-                  patchDay(d.dayOfWeek, "evening", {
-                    startTime: e.target.value,
-                  })
-                }
-              />
-              <span className="text-xs text-muted">إلى</span>
-              <Input
-                className="font-latin h-9 w-[5.5rem]"
-                type="time"
-                value={d.evening.endTime}
-                disabled={!d.evening.isActive}
-                onChange={(e) =>
-                  patchDay(d.dayOfWeek, "evening", {
-                    endTime: e.target.value,
-                  })
-                }
-              />
-            </label>
+            <ShiftBlock
+              label="مسائي"
+              active={d.evening.isActive}
+              startTime={d.evening.startTime}
+              endTime={d.evening.endTime}
+              onToggle={(v) =>
+                patchDay(d.dayOfWeek, "evening", { isActive: v })
+              }
+              onStart={(v) =>
+                patchDay(d.dayOfWeek, "evening", { startTime: v })
+              }
+              onEnd={(v) => patchDay(d.dayOfWeek, "evening", { endTime: v })}
+            />
           </div>
         ))}
       </div>
 
-      {summary.length > 0 ? (
-        <p className="mt-3 text-xs leading-relaxed text-muted">
-          النشط: {summary.join(" · ")}
-        </p>
+      {summaryRows.length > 0 ? (
+        <div className="mt-3 rounded-xl border border-border bg-white px-3 py-2">
+          <p className="mb-1.5 text-xs font-bold text-navy">الملخص النشط</p>
+          <ul className="space-y-1">
+            {summaryRows.map((row) => (
+              <li
+                key={row.day}
+                className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted"
+              >
+                <span className="font-semibold text-navy">{row.day}</span>
+                <span className="font-latin tabular-nums">{row.text}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : (
         <p className="mt-3 text-xs text-danger">لا فترات مفعّلة بعد</p>
       )}

@@ -4,6 +4,7 @@ import { DashboardShell, TopHeader } from "@/components/layout/DashboardShell";
 import { Card } from "@/components/ui/Card";
 import { navDoctorSpecialistAr } from "@/i18n/ar";
 import { WorkingHoursEditor } from "@/components/forms/WorkingHoursEditor";
+import { toLatinDigits } from "@/lib/latin-digits";
 
 export const dynamic = "force-dynamic";
 
@@ -34,11 +35,14 @@ export default async function HoursSettingsPage() {
     <DashboardShell items={navDoctorSpecialistAr as never} userName={user.fullName}>
       <TopHeader
         title="مواعيد العمل"
-        subtitle="لكل طبيب: أيام مخصّصة · دوام صباحي ودوام مسائي منفصلان"
+        subtitle="جدول منظم لكل طبيب · صباحي ومسائي · ساعات بأرقام غربية 0–9"
       />
-      <div className="grid gap-4 lg:grid-cols-1 xl:grid-cols-2">
-        {uniqueDoctors.map((doc) => (
+      <div className="mx-auto grid max-w-4xl gap-5">
+        {uniqueDoctors.map((doc, i) => (
           <Card key={doc.id}>
+            <p className="font-latin mb-2 text-xs font-bold tabular-nums text-muted">
+              طبيب {toLatinDigits(i + 1)} من {toLatinDigits(uniqueDoctors.length)}
+            </p>
             <WorkingHoursEditor
               csrfToken={user.csrfToken}
               doctorId={doc.id}
