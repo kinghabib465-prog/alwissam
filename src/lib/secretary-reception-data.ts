@@ -169,14 +169,14 @@ export async function loadSecretaryOpenPayments() {
         appointment: { include: { waitingRoomEntry: true } },
       },
       orderBy: { createdAt: "desc" },
-      take: 40,
+      take: 60,
     }),
     prisma.payment.findMany({
       include: {
         invoice: { include: { patient: true } },
       },
-      orderBy: { createdAt: "desc" },
-      take: 15,
+      orderBy: [{ paymentDate: "desc" }, { createdAt: "desc" }],
+      take: 80,
     }),
   ]);
 
@@ -187,6 +187,7 @@ export async function loadSecretaryOpenPayments() {
       amount: Number(inv.remainingAmount),
       entryId: inv.appointment?.waitingRoomEntry?.id,
       appointmentId: inv.appointmentId,
+      createdAt: inv.createdAt.toISOString(),
     })),
     recentPayments: recentPayments.map((p) => ({
       id: p.id,

@@ -13,7 +13,8 @@ import {
 } from "@/components/secretary/DirectedDoctorPicker";
 import { CollectDoctorChargeForm } from "@/components/secretary/CollectDoctorChargeForm";
 import { toLatinDigits } from "@/lib/latin-digits";
-import { formatCurrencyDZD, formatArabicDate } from "@/lib/utils";
+import { formatClinicDate } from "@/lib/clinic-date";
+import { formatCurrencyDZD } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
 export type ReceptionTab = "today" | "intake" | "waiting" | "pay";
@@ -38,6 +39,7 @@ type OpenInvoice = {
   amount: number;
   entryId?: string | null;
   appointmentId?: string | null;
+  createdAt?: string;
 };
 
 type RecentPayment = {
@@ -47,6 +49,39 @@ type RecentPayment = {
   receiptNumber: string;
   paymentDate: string;
 };
+
+function algiersYmd(iso: string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Algiers",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
+}
+
+function groupByClinicDay<T extends { amount: number }>(
+  rows: T[],
+  dateOf: (row: T) => string,
+) {
+  const map = new Map<string, { ymd: string; label: string; rows: T[]; total: number }>();
+  for (const row of rows) {
+    const iso = dateOf(row);
+    const ymd = algiersYmd(iso);
+    const cur = map.get(ymd);
+    if (cur) {
+      cur.rows.push(row);
+      cur.total += row.amount;
+    } else {
+      map.set(ymd, {
+        ymd,
+        label: formatClinicDate(iso),
+        rows: [row],
+        total: row.amount,
+      });
+    }
+  }
+  return [...map.values()].sort((a, b) => b.ymd.localeCompare(a.ymd));
+}
 
 const TABS: {
   id: ReceptionTab;
@@ -268,17 +303,61 @@ export function SecretaryReceptionHub({
       ) : null}
 
       {tab === "pay" ? (
-        <section className="grid gap-4 lg:grid-cols-2">
-          <Card>
-            <h2 className="mb-3 font-bold text-navy">بانتظار الاستلام</h2>
-            {openInvoices.length === 0 ? (
-              <EmptyState
-                title="لا مبالغ الآن"
-                description="يظهر المبلغ هنا بعد إنهاء الطبيب للمعاينة."
-              />
-            ) : (
-              <div className="space-y-3">
-                {openInvoices.map((inv) => (
+        <PayByDayPanel
+          openInvoices={openInvoices}
+          recentPayments={recentPayments}
+          csrfToken={csrfToken}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** سجل الدفع منظم حسب يوم الجزائر — بانتظار + مستلم */
+function PayByDayPanel({
+  openInvoices,
+  recentPayments,
+  csrfToken,
+}: {
+  openInvoices: OpenInvoice[];
+  recentPayments: RecentPayment[];
+  csrfToken: string;
+}) {
+  const pendingByDay = useMemo(
+    () =>
+      groupByClinicDay(openInvoices, (inv) => inv.createdAt || new Date().toISOString()),
+    [openInvoices],
+  );
+  const receivedByDay = useMemo(
+    () => groupByClinicDay(recentPayments, (p) => p.paymentDate),
+    [recentPayments],
+  );
+  const todayYmd = algiersYmd(new Date().toISOString());
+
+  return (
+    <section className="grid gap-4 lg:grid-cols-2">
+      <Card>
+        <h2 className="mb-1 font-bold text-navy">بانتظار الاستلام</h2>
+        <p className="mb-3 text-xs text-muted">مُجمَّع حسب يوم إصدار المبلغ</p>
+        {pendingByDay.length === 0 ? (
+          <EmptyState
+            title="لا مبالغ الآن"
+            description="يظهر المبلغ هنا بعد إنهاء الطبيب للمعاينة."
+          />
+        ) : (
+          <div className="space-y-4">
+            {pendingByDay.map((day) => (
+              <div key={`pending-${day.ymd}`} className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#F5F8FB] px-3 py-2">
+                  <p className="text-sm font-bold text-navy">
+                    {day.ymd === todayYmd ? "اليوم — " : ""}
+                    <span className="font-latin tabular-nums">{day.label}</span>
+                  </p>
+                  <p className="font-latin text-xs font-bold tabular-nums text-teal">
+                    {toLatinDigits(day.rows.length)} · {formatCurrencyDZD(day.total)}
+                  </p>
+                </div>
+                {day.rows.map((inv) => (
                   <div key={inv.id} id={`invoice-${inv.id}`}>
                     <CollectDoctorChargeForm
                       invoiceId={inv.id}
@@ -291,38 +370,53 @@ export function SecretaryReceptionHub({
                   </div>
                 ))}
               </div>
-            )}
-          </Card>
-          <Card>
-            <h2 className="mb-3 font-bold text-navy">آخر الاستلامات</h2>
-            {recentPayments.length === 0 ? (
-              <EmptyState title="لا مدفوعات بعد" />
-            ) : (
-              <div className="space-y-2">
-                {recentPayments.map((payment) => (
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <h2 className="mb-1 font-bold text-navy">سجل الاستلام</h2>
+        <p className="mb-3 text-xs text-muted">مُرتَّب يوم بيوم — الأحدث أولاً</p>
+        {receivedByDay.length === 0 ? (
+          <EmptyState title="لا مدفوعات بعد" />
+        ) : (
+          <div className="space-y-4">
+            {receivedByDay.map((day) => (
+              <div key={`paid-${day.ymd}`} className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-teal/25 bg-soft-teal/20 px-3 py-2">
+                  <p className="text-sm font-bold text-navy">
+                    {day.ymd === todayYmd ? "اليوم — " : ""}
+                    <span className="font-latin tabular-nums">{day.label}</span>
+                  </p>
+                  <p className="font-latin text-xs font-bold tabular-nums text-teal">
+                    {toLatinDigits(day.rows.length)} دفعة ·{" "}
+                    {formatCurrencyDZD(day.total)}
+                  </p>
+                </div>
+                {day.rows.map((payment) => (
                   <div
                     key={payment.id}
-                    className="rounded-2xl border border-border p-3 text-sm"
+                    className="rounded-2xl border border-border bg-white p-3 text-sm"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="font-semibold text-navy">
                         {payment.patientName}
                       </p>
-                      <p className="font-latin tabular-nums">
+                      <p className="font-latin font-bold tabular-nums text-teal">
                         {formatCurrencyDZD(payment.amount)}
                       </p>
                     </div>
-                    <p className="font-latin text-xs tabular-nums text-muted">
-                      {payment.receiptNumber} ·{" "}
-                      {formatArabicDate(new Date(payment.paymentDate))}
+                    <p className="font-latin mt-1 text-xs tabular-nums text-muted">
+                      إيصال {toLatinDigits(payment.receiptNumber)}
                     </p>
                   </div>
                 ))}
               </div>
-            )}
-          </Card>
-        </section>
-      ) : null}
-    </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </section>
   );
 }
