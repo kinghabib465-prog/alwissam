@@ -30,7 +30,7 @@ export default async function SpecialistPatientsPage() {
     <DashboardShell items={navDoctorSpecialistAr as never} userName={user.fullName}>
       <TopHeader
         title="مرضاي"
-        subtitle="ملف المرضى — حجز · حساب · بيانات (ليس طابور اليوم)"
+        subtitle="حجز يوم + صباح/مساء بدون فتح حساب — الموعد يظهر للسكرتارية يومه فقط"
       />
       <ClinicWorkflowGuide variant="patients" />
       <div className="card-surface p-4 sm:p-5">

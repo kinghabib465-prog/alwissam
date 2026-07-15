@@ -598,7 +598,8 @@ export function DoctorPatientCard({
             {tab === "schedule" && canManage && (
               <div className="space-y-3">
                 <p className="text-sm text-muted">
-                  اختر اليوم والفترة (صباح أو مساء) حسب دوامك — بدون ساعة دقيقة
+                  حجز يوم + صباح/مساء حسب دوامك — بدون فتح حساب. الموعد يظهر
+                  للسكرتارية تلقائياً في خانة «مواعيد اليوم» يوم الموعد فقط.
                 </p>
                 {availability && availability.workDays.length > 0 ? (
                   <AppointmentDatePicker

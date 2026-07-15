@@ -5,6 +5,7 @@ import { Card, EmptyState } from "@/components/ui/Card";
 import { navDoctorGeneralAr } from "@/i18n/ar";
 import { DoctorPatientsList } from "@/components/doctor/DoctorPatientsList";
 import { loadDoctorPatients } from "@/lib/doctor-patients";
+import { loadDoctorAvailability } from "@/lib/doctor-availability.server";
 
 export const dynamic = "force-dynamic";
 
@@ -15,12 +16,13 @@ export default async function GeneralPatientsPage() {
   });
   const since = doctor?.createdAt || user.createdAt || new Date(0);
   const patients = doctor ? await loadDoctorPatients(doctor.id, since) : [];
+  const availability = doctor ? await loadDoctorAvailability(doctor.id) : null;
 
   return (
     <DashboardShell items={navDoctorGeneralAr as never} userName={user.fullName}>
       <TopHeader
         title="مرضاي"
-        subtitle="بحث وتصفية — من عاينتهم منذ فتح حسابك"
+        subtitle="حجز موعد (صباح/مساء) بدون فتح حساب — يظهر للسكرتارية يوم الموعد"
       />
       <Card>
         {patients.length === 0 ? (
@@ -29,6 +31,8 @@ export default async function GeneralPatientsPage() {
           <DoctorPatientsList
             patients={patients}
             csrfToken={user.csrfToken}
+            canManage
+            availability={availability}
           />
         )}
       </Card>

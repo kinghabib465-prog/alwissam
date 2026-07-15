@@ -100,7 +100,7 @@ export function SecretaryScheduledBar({
           </Select>
         </div>
         <Button size="sm" variant="teal" loading={loading} onClick={checkIn}>
-          وصل — إدخال للطبيب
+          توجيه للطبيب
         </Button>
       </div>
       {error && <p className="px-3 pb-2 text-sm text-danger">{error}</p>}

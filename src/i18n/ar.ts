@@ -136,7 +136,7 @@ export const commonAr = {
 
 export const navSecretaryAr = [
   { href: "/secretary/dashboard", label: "الاستقبال", icon: "LayoutDashboard" },
-  { href: "/secretary/today", label: "المواعيد", icon: "Calendar" },
+  { href: "/secretary/today", label: "مواعيد اليوم", icon: "Calendar" },
   { href: "/secretary/directed", label: "الموجهون", icon: "Users" },
   { href: "/secretary/payments", label: "الدفع", icon: "Wallet" },
 ];

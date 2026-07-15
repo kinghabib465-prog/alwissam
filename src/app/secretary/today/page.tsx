@@ -1,30 +1,50 @@
 import { requireUser } from "@/lib/auth/current-user";
 import { prisma } from "@/lib/db/prisma";
 import { DashboardShell, TopHeader } from "@/components/layout/DashboardShell";
-import { Card, EmptyState } from "@/components/ui/Card";
 import { appointmentTypeAr, navSecretaryAr } from "@/i18n/ar";
-import { SecretaryScheduledBar } from "@/components/secretary/SecretaryScheduledBar";
 import { SecretaryAutoRefresh } from "@/components/secretary/SecretaryAutoRefresh";
+import { SecretaryTodayAppointmentsDrop } from "@/components/secretary/SecretaryTodayAppointmentsDrop";
 import {
   algiersWeekday,
   listSecretaryTodayPendingCheckIns,
 } from "@/lib/secretary-today";
 import { formatClinicDate } from "@/lib/clinic-date";
-import { toLatinDigits } from "@/lib/latin-digits";
-import {
-  periodFromStartAt,
-  SHIFT_LABEL_AR,
-} from "@/lib/doctor-availability";
+import { periodFromStartAt } from "@/lib/doctor-availability";
+import { CLINIC_SHIFT_HOURS } from "@/lib/clinic-shifts";
 
 export const dynamic = "force-dynamic";
 
-/**
- * مواعيد اليوم — فقط من يجب إدخالهم للطبيب (وصل يوم موعدهم)
- */
+function mapApt(
+  apt: Awaited<
+    ReturnType<typeof listSecretaryTodayPendingCheckIns>
+  >["morning"][number],
+) {
+  const period = periodFromStartAt(apt.startAt);
+  return {
+    id: apt.id,
+    fullName: apt.patient.fullName,
+    phone: apt.patient.phone,
+    age: apt.patient.age,
+    city: apt.patient.city,
+    doctorId: apt.doctorId,
+    doctorName: apt.doctor.user.fullName,
+    startAtIso: apt.startAt.toISOString(),
+    appointmentTypeLabel:
+      appointmentTypeAr[apt.appointmentType] || apt.appointmentType,
+    period:
+      period === "EVENING"
+        ? ("EVENING" as const)
+        : period === "DAY"
+          ? ("DAY" as const)
+          : ("MORNING" as const),
+  };
+}
+
+/** صفحة مواعيد اليوم — خانة منسدلة + توجيه بدون فتح حساب */
 export default async function SecretaryTodayAppointmentsPage() {
   const user = await requireUser(["SECRETARY", "ADMIN"]);
   const today = algiersWeekday();
-  const { start, pending } = await listSecretaryTodayPendingCheckIns();
+  const todayPending = await listSecretaryTodayPendingCheckIns();
 
   const doctors = await prisma.doctor.findMany({
     where: { isActive: true },
@@ -46,69 +66,26 @@ export default async function SecretaryTodayAppointmentsPage() {
     type: d.type,
   }));
 
-  const todayLabel = formatClinicDate(start);
+  const todayLabel = formatClinicDate(todayPending.start);
+  const morning = CLINIC_SHIFT_HOURS.MORNING;
+  const evening = CLINIC_SHIFT_HOURS.EVENING;
 
   return (
     <DashboardShell items={navSecretaryAr as never} userName={user.fullName}>
       <SecretaryAutoRefresh seconds={8} />
       <TopHeader
         title="مواعيد اليوم"
-        subtitle={`${todayLabel} — مواعيد حدّدها الطبيب وتظهر فقط في يومها`}
+        subtitle={`${todayLabel} · صباح ${morning.start}–${morning.end} · مساء ${evening.start}–${evening.end}`}
       />
-      <Card>
-        {pending.length === 0 ? (
-          <EmptyState
-            title="لا أحد بانتظار الإدخال"
-            description="عند حلول يوم الموعد يظهر المريض هنا. بعد الإدخال يختفي من هذه القائمة."
-          />
-        ) : (
-          <div className="space-y-3">
-            <p className="text-sm font-bold text-teal">
-              بانتظار الإدخال: {toLatinDigits(pending.length)}
-            </p>
-            <p className="text-xs text-muted">
-              مرتّبون صباح ثم مساء — مريض واحد لكل صف
-            </p>
-            {pending.map((apt, index) => (
-              <SecretaryScheduledBar
-                key={apt.id}
-                appointmentId={apt.id}
-                fullName={apt.patient.fullName}
-                phone={apt.patient.phone}
-                age={apt.patient.age}
-                city={apt.patient.city}
-                doctorId={apt.doctorId}
-                doctorName={apt.doctor.user.fullName}
-                startAtIso={apt.startAt.toISOString()}
-                appointmentTypeLabel={
-                  appointmentTypeAr[apt.appointmentType] ||
-                  apt.appointmentType
-                }
-                queueOrder={index + 1}
-                doctors={doctorOpts}
-                csrfToken={user.csrfToken}
-              />
-            ))}
-          </div>
-        )}
-      </Card>
-
-      {pending.length > 0 ? (
-        <Card className="mt-4">
-          <p className="mb-2 text-sm font-bold text-navy">ملخص سريع</p>
-          <ul className="space-y-1 text-sm text-muted">
-            {pending.map((apt, index) => (
-              <li key={`sum-${apt.id}`}>
-                {toLatinDigits(index + 1)}. {apt.patient.fullName}
-                {" — "}
-                {SHIFT_LABEL_AR[periodFromStartAt(apt.startAt)]}
-                {" · "}
-                {apt.doctor.user.fullName}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ) : null}
+      <SecretaryTodayAppointmentsDrop
+        todayLabel={todayLabel}
+        clinicShift={todayPending.clinicShift}
+        morning={todayPending.morning.map(mapApt)}
+        evening={todayPending.evening.map(mapApt)}
+        doctors={doctorOpts}
+        csrfToken={user.csrfToken}
+        defaultOpen
+      />
     </DashboardShell>
   );
 }

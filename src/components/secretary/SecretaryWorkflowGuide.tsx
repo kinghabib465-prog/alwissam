@@ -13,7 +13,8 @@ export function SecretaryWorkflowGuide() {
       <ol className="list-decimal space-y-2 border-t border-border px-4 py-3 pr-8 text-sm leading-relaxed text-muted">
         <li>
           <span className="font-semibold text-navy">مواعيد اليوم</span> — من حجز
-          لهم الطبيب ووصل يوم موعدهم: أدخليهم للطبيب عند وصولهم.
+          لهم الطبيب (بدون فتح حساب) ووصل يوم موعدهم: الصباح في الصباح والمساء
+          في المساء — وجّهيهم للطبيب من القائمة المنسدلة.
         </li>
         <li>
           <span className="font-semibold text-navy">تسجيل عند المدخل</span> —

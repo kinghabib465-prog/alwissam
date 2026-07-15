@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (
     !user ||
-    !["DOCTOR_SPECIALIST", "ADMIN"].includes(user.role.code)
+    !["DOCTOR_SPECIALIST", "DOCTOR_GENERAL", "ADMIN"].includes(user.role.code)
   ) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
   }
@@ -238,7 +238,10 @@ export async function POST(req: NextRequest) {
 /** تعديل موعد موجود — يوم + فترة */
 export async function PATCH(req: NextRequest) {
   const user = await getCurrentUser();
-  if (!user || !["DOCTOR_SPECIALIST", "ADMIN"].includes(user.role.code)) {
+  if (
+    !user ||
+    !["DOCTOR_SPECIALIST", "DOCTOR_GENERAL", "ADMIN"].includes(user.role.code)
+  ) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
   }
   if (req.headers.get("x-csrf-token") !== user.csrfToken) {
