@@ -5,30 +5,25 @@ import { Card, EmptyState } from "@/components/ui/Card";
 import { appointmentTypeAr, navSecretaryAr } from "@/i18n/ar";
 import { SecretaryScheduledBar } from "@/components/secretary/SecretaryScheduledBar";
 import { SecretaryAutoRefresh } from "@/components/secretary/SecretaryAutoRefresh";
-import { listSecretaryTodayPendingCheckIns } from "@/lib/secretary-today";
+import {
+  algiersWeekday,
+  listSecretaryTodayPendingCheckIns,
+} from "@/lib/secretary-today";
 import { formatClinicDate } from "@/lib/clinic-date";
-import { DayOfWeek } from "@prisma/client";
 import { toLatinDigits } from "@/lib/latin-digits";
-import { formatTime } from "@/lib/utils";
+import {
+  periodFromStartAt,
+  SHIFT_LABEL_AR,
+} from "@/lib/doctor-availability";
 
 export const dynamic = "force-dynamic";
 
-const DAY_MAP: DayOfWeek[] = [
-  "SUNDAY",
-  "MONDAY",
-  "TUESDAY",
-  "WEDNESDAY",
-  "THURSDAY",
-  "FRIDAY",
-  "SATURDAY",
-];
-
 /**
- * مواعيد اليوم — فقط من يجب إدخالهم للطبيب (لم يدخلوا الانتظار بعد)
+ * مواعيد اليوم — فقط من يجب إدخالهم للطبيب (وصل يوم موعدهم)
  */
 export default async function SecretaryTodayAppointmentsPage() {
   const user = await requireUser(["SECRETARY", "ADMIN"]);
-  const today = DAY_MAP[new Date().getDay()]!;
+  const today = algiersWeekday();
   const { start, pending } = await listSecretaryTodayPendingCheckIns();
 
   const doctors = await prisma.doctor.findMany({
@@ -58,13 +53,13 @@ export default async function SecretaryTodayAppointmentsPage() {
       <SecretaryAutoRefresh seconds={8} />
       <TopHeader
         title="مواعيد اليوم"
-        subtitle={`${todayLabel} — مرضى لديهم موعد اليوم ولم يُدخلوا بعد`}
+        subtitle={`${todayLabel} — مواعيد حدّدها الطبيب وتظهر فقط في يومها`}
       />
       <Card>
         {pending.length === 0 ? (
           <EmptyState
             title="لا أحد بانتظار الإدخال"
-            description="المرضى الموجودون في العيادة أو المنتهون لا يظهرون هنا. من يُحجز له موعد وهو داخل العيادة ينتظر موعده التالي دون تكرار."
+            description="عند حلول يوم الموعد يظهر المريض هنا. بعد الإدخال يختفي من هذه القائمة."
           />
         ) : (
           <div className="space-y-3">
@@ -72,7 +67,7 @@ export default async function SecretaryTodayAppointmentsPage() {
               بانتظار الإدخال: {toLatinDigits(pending.length)}
             </p>
             <p className="text-xs text-muted">
-              مرتّبون حسب وقت الموعد — مريض واحد لكل صف، دون إعادة من أُدخل أو أنهى
+              مرتّبون صباح ثم مساء — مريض واحد لكل صف
             </p>
             {pending.map((apt, index) => (
               <SecretaryScheduledBar
@@ -86,7 +81,8 @@ export default async function SecretaryTodayAppointmentsPage() {
                 doctorName={apt.doctor.user.fullName}
                 startAtIso={apt.startAt.toISOString()}
                 appointmentTypeLabel={
-                  appointmentTypeAr[apt.appointmentType] || apt.appointmentType
+                  appointmentTypeAr[apt.appointmentType] ||
+                  apt.appointmentType
                 }
                 queueOrder={index + 1}
                 doctors={doctorOpts}
@@ -105,7 +101,7 @@ export default async function SecretaryTodayAppointmentsPage() {
               <li key={`sum-${apt.id}`}>
                 {toLatinDigits(index + 1)}. {apt.patient.fullName}
                 {" — "}
-                {toLatinDigits(formatTime(apt.startAt))}
+                {SHIFT_LABEL_AR[periodFromStartAt(apt.startAt)]}
                 {" · "}
                 {apt.doctor.user.fullName}
               </li>

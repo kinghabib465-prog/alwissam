@@ -5,8 +5,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Form";
 import { SecretaryPatientInfo } from "@/components/secretary/SecretaryPatientInfo";
-import { formatTime } from "@/lib/utils";
-import { toLatinDigits } from "@/lib/latin-digits";
+import {
+  periodFromStartAt,
+  SHIFT_LABEL_AR,
+} from "@/lib/doctor-availability";
 
 type DoctorOpt = { id: string; name: string; type: string };
 
@@ -17,6 +19,7 @@ export function SecretaryScheduledBar({
   age,
   city,
   doctorId,
+  doctorName,
   startAtIso,
   appointmentTypeLabel,
   queueOrder,
@@ -40,6 +43,7 @@ export function SecretaryScheduledBar({
   const [selectedDoctor, setSelectedDoctor] = useState(doctorId);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const period = SHIFT_LABEL_AR[periodFromStartAt(startAtIso)];
 
   async function checkIn() {
     setLoading(true);
@@ -66,7 +70,7 @@ export function SecretaryScheduledBar({
   }
 
   return (
-    <div>
+    <div className="overflow-hidden rounded-2xl border border-teal/35 bg-white shadow-sm">
       <SecretaryPatientInfo
         fullName={fullName}
         phone={phone}
@@ -75,11 +79,12 @@ export function SecretaryScheduledBar({
         queueOrder={queueOrder}
       >
         <span className="rounded-2xl bg-soft-teal px-2.5 py-1 text-xs font-semibold text-teal">
-          موعد {toLatinDigits(formatTime(startAtIso))} · {appointmentTypeLabel}
+          {period} · {appointmentTypeLabel}
         </span>
+        <span className="text-xs text-muted">{doctorName}</span>
       </SecretaryPatientInfo>
 
-      <div className="mt-2 flex flex-col gap-2 rounded-2xl border border-teal/30 bg-soft-teal/15 p-3 sm:flex-row sm:items-end">
+      <div className="mt-0 flex flex-col gap-2 border-t border-teal/20 bg-soft-teal/15 p-3 sm:flex-row sm:items-end">
         <div className="flex-1">
           <p className="mb-1 text-xs text-muted">الطبيب</p>
           <Select
@@ -95,10 +100,10 @@ export function SecretaryScheduledBar({
           </Select>
         </div>
         <Button size="sm" variant="teal" loading={loading} onClick={checkIn}>
-          إدخال للطبيب
+          وصل — إدخال للطبيب
         </Button>
       </div>
-      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+      {error && <p className="px-3 pb-2 text-sm text-danger">{error}</p>}
     </div>
   );
 }

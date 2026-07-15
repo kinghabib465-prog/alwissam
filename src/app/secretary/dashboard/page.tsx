@@ -3,33 +3,27 @@ import { prisma } from "@/lib/db/prisma";
 import Link from "next/link";
 import { DashboardShell, TopHeader } from "@/components/layout/DashboardShell";
 import { Card, EmptyState } from "@/components/ui/Card";
-import { navSecretaryAr } from "@/i18n/ar";
+import { appointmentTypeAr, navSecretaryAr } from "@/i18n/ar";
 import { SecretaryRequestBar } from "@/components/secretary/SecretaryRequestBar";
+import { SecretaryScheduledBar } from "@/components/secretary/SecretaryScheduledBar";
 import { SecretaryAutoRefresh } from "@/components/secretary/SecretaryAutoRefresh";
 import { SecretaryWalkInForm } from "@/components/secretary/SecretaryWalkInForm";
 import { algiersDayBounds } from "@/lib/daily-queue";
-import { countSecretaryTodayPendingCheckIns } from "@/lib/secretary-today";
-import { DayOfWeek } from "@prisma/client";
+import {
+  algiersWeekday,
+  listSecretaryTodayPendingCheckIns,
+} from "@/lib/secretary-today";
+import { formatClinicDate } from "@/lib/clinic-date";
 import { toLatinDigits } from "@/lib/latin-digits";
 
 export const dynamic = "force-dynamic";
 
-const DAY_MAP: DayOfWeek[] = [
-  "SUNDAY",
-  "MONDAY",
-  "TUESDAY",
-  "WEDNESDAY",
-  "THURSDAY",
-  "FRIDAY",
-  "SATURDAY",
-];
-
 export default async function SecretaryDashboardPage() {
   const user = await requireUser(["SECRETARY", "ADMIN"]);
   const { start, end } = algiersDayBounds();
-  const today = DAY_MAP[new Date().getDay()]!;
+  const today = algiersWeekday();
 
-  const [waiting, todayApptCount, doctors] = await Promise.all([
+  const [waiting, todayPending, doctors] = await Promise.all([
     prisma.appointmentRequest.findMany({
       where: {
         status: { in: ["NEW_REQUEST", "EMERGENCY", "UNDER_SECRETARY_REVIEW"] },
@@ -38,7 +32,7 @@ export default async function SecretaryDashboardPage() {
       orderBy: { createdAt: "asc" },
       take: 100,
     }),
-    countSecretaryTodayPendingCheckIns(),
+    listSecretaryTodayPendingCheckIns(),
     prisma.doctor.findMany({
       where: { isActive: true },
       include: {
@@ -71,25 +65,66 @@ export default async function SecretaryDashboardPage() {
       return true;
     });
 
+  const todayLabel = formatClinicDate(start);
+  const pending = todayPending.pending;
+
   return (
     <DashboardShell items={navSecretaryAr as never} userName={user.fullName}>
       <SecretaryAutoRefresh seconds={5} />
       <TopHeader
         title={`استقبال — ${user.fullName}`}
-        subtitle="طلبات التسجيل من الموقع والمدخل — عدّلي البيانات ثم وجّهي للطبيب"
+        subtitle={`${todayLabel} — مواعيد اليوم عند وصولها · ثم تسجيل المدخل`}
       />
 
-      {todayApptCount > 0 && (
-        <Link
-          href="/secretary/today"
-          className="mb-4 flex items-center justify-between rounded-2xl border-2 border-teal/40 bg-soft-teal/25 px-4 py-3 font-bold text-navy hover:bg-soft-teal/40"
-        >
-          <span>مواعيد اليوم بانتظار الإدخال</span>
-          <span className="font-latin rounded-full bg-teal px-3 py-1 text-white">
-            {toLatinDigits(todayApptCount)}
-          </span>
-        </Link>
-      )}
+      {/* مواعيد حددها الطبيب — تظهر يومها فقط */}
+      <Card className="mb-4 border-teal/40">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="font-bold text-navy">مواعيد اليوم</p>
+            <p className="text-xs text-muted">
+              حددها الطبيب — تظهر هنا في يوم الموعد فقط حتى تُدخلين المريض
+            </p>
+          </div>
+          <Link
+            href="/secretary/today"
+            className="text-xs font-bold text-teal hover:underline"
+          >
+            فتح صفحة المواعيد
+          </Link>
+        </div>
+        {pending.length === 0 ? (
+          <EmptyState
+            title="لا مواعيد بانتظار الإدخال اليوم"
+            description="عندما يحين يوم الموعد الذي حدده الطبيب يظهر المريض هنا."
+          />
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm font-bold text-teal">
+              بانتظار الإدخال: {toLatinDigits(pending.length)}
+            </p>
+            {pending.map((apt, index) => (
+              <SecretaryScheduledBar
+                key={apt.id}
+                appointmentId={apt.id}
+                fullName={apt.patient.fullName}
+                phone={apt.patient.phone}
+                age={apt.patient.age}
+                city={apt.patient.city}
+                doctorId={apt.doctorId}
+                doctorName={apt.doctor.user.fullName}
+                startAtIso={apt.startAt.toISOString()}
+                appointmentTypeLabel={
+                  appointmentTypeAr[apt.appointmentType] ||
+                  apt.appointmentType
+                }
+                queueOrder={index + 1}
+                doctors={doctorOpts}
+                csrfToken={user.csrfToken}
+              />
+            ))}
+          </div>
+        )}
+      </Card>
 
       <SecretaryWalkInForm csrfToken={user.csrfToken} />
 
@@ -97,11 +132,11 @@ export default async function SecretaryDashboardPage() {
         {waiting.length === 0 ? (
           <EmptyState
             title="لا مرضى عند المدخل"
-            description="سجّل القادم بزر أخضر أعلاه، أو راجع خانة المواعيد لمواعيد اليوم."
+            description="سجّل القادم بزر أخضر أعلاه، أو راجعي مواعيد اليوم أعلاه."
           />
         ) : (
           <div className="space-y-3">
-            <p className="text-sm font-bold text-navy">عند المدخل</p>
+            <p className="text-sm font-bold text-navy">تسجيل عند المدخل</p>
             {waiting.map((req, index) => (
               <SecretaryRequestBar
                 key={req.id}
