@@ -167,7 +167,7 @@ export function DoctorPatientCard({
     return data;
   }
 
-  async function saveSchedule(editExisting: boolean) {
+  async function saveSchedule(_editExisting?: boolean) {
     if (!selectedDate) {
       setError("اختر يوم موعد من أيام عملك");
       return;
@@ -179,29 +179,21 @@ export function DoctorPatientCard({
         return;
       }
     }
-    const body =
-      editExisting && patient.nextAppointmentId
-        ? {
-            appointmentId: patient.nextAppointmentId,
-            date: selectedDate,
-            shift: selectedShift,
-          }
-        : {
-            patientId: patient.id,
-            date: selectedDate,
-            appointmentType: apptType,
-            shift: selectedShift,
-          };
-
+    // دائماً POST — السيرفر يحدّث موعد نفس اليوم بدل إنشاء مكرر
     const data = await api(
       "/api/doctor/schedule-appointment",
-      editExisting && patient.nextAppointmentId ? "PATCH" : "POST",
-      body,
+      "POST",
+      {
+        patientId: patient.id,
+        date: selectedDate,
+        appointmentType: apptType,
+        shift: selectedShift,
+      },
     );
     if (!data) return;
     setOk(
-      editExisting
-        ? "تم تعديل يوم/فترة الموعد"
+      data.updated
+        ? "تم تحديث الموعد لنفس اليوم (بدون تكرار)"
         : `تم حجز الموعد (${selectedShift === "EVENING" ? "مساء" : selectedShift === "DAY" ? "اليوم" : "صباح"})`,
     );
     router.refresh();
@@ -598,8 +590,9 @@ export function DoctorPatientCard({
             {tab === "schedule" && canManage && (
               <div className="space-y-3">
                 <p className="text-sm text-muted">
-                  حجز يوم + صباح/مساء حسب دوامك — بدون فتح حساب. الموعد يظهر
-                  للسكرتارية تلقائياً في خانة «مواعيد اليوم» يوم الموعد فقط.
+                  حجز يوم + صباح/مساء — موعد واحد للمريض في اليوم. أي حفظ لاحق
+                  يعدّل نفس الموعد ولا ينشئ موعداً جديداً. يظهر للسكرتارية يوم
+                  الموعد فقط (بدون فتح حساب).
                 </p>
                 {availability && availability.workDays.length > 0 ? (
                   <AppointmentDatePicker
@@ -638,21 +631,10 @@ export function DoctorPatientCard({
                     variant="teal"
                     loading={loading}
                     disabled={!availability?.workDays.length}
-                    onClick={() => saveSchedule(false)}
+                    onClick={() => saveSchedule()}
                   >
-                    حجز لهذا اليوم
+                    حفظ الموعد
                   </Button>
-                  {patient.nextAppointmentId && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      loading={loading}
-                      disabled={!availability?.workDays.length}
-                      onClick={() => saveSchedule(true)}
-                    >
-                      تعديل الموعد الحالي
-                    </Button>
-                  )}
                 </div>
               </div>
             )}

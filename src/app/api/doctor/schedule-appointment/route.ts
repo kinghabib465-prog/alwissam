@@ -176,6 +176,113 @@ export async function POST(req: NextRequest) {
   }
 
   const noteLine = notes || periodNote(shift, user.fullName);
+  const { start: dayStart, end: dayEnd } = algiersYmdBounds(dateStr);
+
+  /** موعد واحد للمريض في نفس اليوم — أي حجز لاحق يعدّل الموجود بدل إنشاء جديد */
+  const ACTIVE_DAY_STATUSES = [
+    "CONFIRMED",
+    "REMINDER_SENT",
+    "DOCTOR_ASSIGNED",
+  ] as const;
+
+  const existingSameDay = await prisma.appointment.findFirst({
+    where: {
+      patientId,
+      deletedAt: null,
+      startAt: { gte: dayStart, lt: dayEnd },
+      status: { in: [...ACTIVE_DAY_STATUSES] },
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  if (existingSameDay) {
+    const others = await prisma.appointment.findMany({
+      where: {
+        patientId,
+        id: { not: existingSameDay.id },
+        deletedAt: null,
+        startAt: { gte: dayStart, lt: dayEnd },
+        status: { in: [...ACTIVE_DAY_STATUSES] },
+      },
+      select: { id: true },
+    });
+
+    const appointment = await prisma.$transaction(async (tx) => {
+      for (const o of others) {
+        await tx.appointment.update({
+          where: { id: o.id },
+          data: {
+            status: "CANCELLED_BY_CLINIC",
+            deletedAt: new Date(),
+            statusHistory: {
+              create: {
+                previousStatus: "CONFIRMED",
+                newStatus: "CANCELLED_BY_CLINIC",
+                changedById: user.id,
+                reason: "إلغاء تكرار — موعد واحد يومياً للمريض",
+              },
+            },
+          },
+        });
+      }
+
+      return tx.appointment.update({
+        where: { id: existingSameDay.id },
+        data: {
+          doctorId: doctor.id,
+          appointmentType,
+          status: "CONFIRMED",
+          startAt,
+          endAt,
+          durationMinutes,
+          notes: noteLine,
+          statusHistory: {
+            create: {
+              previousStatus: existingSameDay.status,
+              newStatus: "CONFIRMED",
+              changedById: user.id,
+              reason: `تحديث موعد اليوم (${SHIFT_LABEL_AR[shift]}) بواسطة ${user.fullName} — بدون تكرار`,
+            },
+          },
+        },
+      });
+    });
+
+    await prisma.orthodonticCase.updateMany({
+      where: {
+        patientId,
+        doctorId: doctor.id,
+        status: { in: ["IN_PROGRESS", "NOT_STARTED"] },
+      },
+      data: { nextAppointment: startAt },
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      roleCode: user.role.code,
+      action: "APPOINTMENT_UPSERTED_SAME_DAY",
+      entityType: "Appointment",
+      entityId: appointment.id,
+      newValue: {
+        patientId,
+        doctorId: doctor.id,
+        startAt: startAt.toISOString(),
+        shift,
+        mergedDuplicates: others.length,
+      },
+      reason: `موعد واحد ليوم ${dateStr} — عُدّل بدل إنشاء جديد`,
+    });
+
+    return NextResponse.json({
+      ok: true,
+      updated: true,
+      appointment: {
+        id: appointment.id,
+        startAt: appointment.startAt.toISOString(),
+        shift,
+      },
+    });
+  }
 
   const appointment = await prisma.appointment.create({
     data: {
@@ -308,6 +415,22 @@ export async function PATCH(req: NextRequest) {
           reason: `تعديل الموعد إلى ${SHIFT_LABEL_AR[shift]} بواسطة ${user.fullName}`,
         },
       },
+    },
+  });
+
+  // ألْغِ أي مواعيد أخرى لنفس المريض في نفس اليوم
+  const { start: dayStart, end: dayEnd } = algiersYmdBounds(dateStr);
+  await prisma.appointment.updateMany({
+    where: {
+      patientId: apt.patientId,
+      id: { not: appointmentId },
+      deletedAt: null,
+      startAt: { gte: dayStart, lt: dayEnd },
+      status: { in: ["CONFIRMED", "REMINDER_SENT", "DOCTOR_ASSIGNED"] },
+    },
+    data: {
+      status: "CANCELLED_BY_CLINIC",
+      deletedAt: new Date(),
     },
   });
 

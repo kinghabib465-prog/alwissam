@@ -49,41 +49,35 @@ export async function POST(req: NextRequest) {
   }
 
   const peerIds = await listPeerStaffUserIds(user);
-  if (receiverId && !peerIds.includes(receiverId)) {
-    return NextResponse.json({ error: "المستلم غير مسموح" }, { status: 400 });
-  }
-  const targets = receiverId ? [receiverId] : peerIds;
-  if (!targets.length) {
-    return NextResponse.json({ error: "لا يوجد مستلمون" }, { status: 400 });
+  if (!receiverId || !peerIds.includes(receiverId)) {
+    return NextResponse.json(
+      { error: receiverId ? "المستلم غير مسموح" : "اختر مستلماً أولاً" },
+      { status: 400 },
+    );
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  // Voice notes stay as data URLs so they work on Render free without Blob storage
   const audioUrl = `data:${mime};base64,${buffer.toString("base64")}`;
 
-  const created = await prisma.$transaction(
-    targets.map((targetId) =>
-      prisma.message.create({
-        data: {
-          senderId: user.id,
-          receiverId: targetId,
-          kind: "VOICE",
-          body: "رسالة صوتية",
-          audioUrl,
-          subject: "STAFF_CHAT_VOICE",
-        },
-      }),
-    ),
-  );
+  const created = await prisma.message.create({
+    data: {
+      senderId: user.id,
+      receiverId,
+      kind: "VOICE",
+      body: "رسالة صوتية",
+      audioUrl,
+      subject: "STAFF_CHAT_VOICE",
+    },
+  });
 
   await createAuditLog({
     userId: user.id,
     roleCode: user.role.code,
     action: "STAFF_CHAT_VOICE",
     entityType: "Message",
-    entityId: created[0]?.id,
-    newValue: { receivers: targets.length },
+    entityId: created.id,
+    newValue: { receiverId },
   });
 
-  return NextResponse.json({ ok: true, count: created.length });
+  return NextResponse.json({ ok: true, id: created.id });
 }
