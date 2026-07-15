@@ -94,7 +94,8 @@ export async function listSecretaryTodayPendingCheckIns() {
 
   const busyPatientIds = new Set(activeWaiting.map((e) => e.patientId));
   const seenPatients = new Set<string>();
-  const all = [];
+  type AptRow = (typeof appointments)[number];
+  const all: AptRow[] = [];
 
   for (const apt of appointments) {
     if (busyPatientIds.has(apt.patientId)) continue;
@@ -103,18 +104,27 @@ export async function listSecretaryTodayPendingCheckIns() {
     all.push(apt);
   }
 
-  const morning = all.filter(
-    (a) => periodFromStartAt(a.startAt) === "MORNING",
-  );
-  const evening = all.filter(
-    (a) => periodFromStartAt(a.startAt) === "EVENING",
-  );
-  // DAY أو غير ذلك يُعامل كصباحي للعرض
-  const other = all.filter((a) => {
-    const p = periodFromStartAt(a.startAt);
-    return p !== "MORNING" && p !== "EVENING";
-  });
+  /** ترتيب أبجدي بالاسم لسهولة السكرتارية */
+  function byPatientName(a: AptRow, b: AptRow) {
+    return a.patient.fullName.localeCompare(b.patient.fullName, "ar", {
+      sensitivity: "base",
+    });
+  }
+
+  const morning = all
+    .filter((a) => periodFromStartAt(a.startAt) === "MORNING")
+    .sort(byPatientName);
+  const evening = all
+    .filter((a) => periodFromStartAt(a.startAt) === "EVENING")
+    .sort(byPatientName);
+  const other = all
+    .filter((a) => {
+      const p = periodFromStartAt(a.startAt);
+      return p !== "MORNING" && p !== "EVENING";
+    })
+    .sort(byPatientName);
   const morningAll = [...morning, ...other];
+  all.sort(byPatientName);
 
   /** القائمة الظاهرة الآن: صباح في الصباح · مساء في المساء */
   let pending = all;

@@ -84,8 +84,7 @@ export function SecretaryTodayAppointmentsDrop({
       <div className="space-y-4 border-t border-border px-3 py-3 sm:px-4">
         <p className="font-latin text-xs tabular-nums text-muted">{shiftHint}</p>
         <p className="text-xs text-muted">
-          مواعيد حجزها الطبيب (بدون فتح حساب) — عند وصول المريض وجّهيه من هنا
-          للطبيب.
+          أسماء المرضى مرتّبة أبجدياً ضمن الفترة — عند الوصول وجّهي للطبيب.
         </p>
 
         {total === 0 ? (
@@ -113,6 +112,19 @@ export function SecretaryTodayAppointmentsDrop({
                     {CLINIC_SHIFT_HOURS.MORNING.end}
                   </span>
                 </p>
+                <ol className="rounded-xl border border-border/80 bg-[#F8FBFC] px-3 py-2 text-sm">
+                  {visibleMorning.map((apt, index) => (
+                    <li
+                      key={`name-m-${apt.id}`}
+                      className="flex gap-2 border-b border-border/50 py-1.5 last:border-0"
+                    >
+                      <span className="font-latin w-6 shrink-0 font-bold tabular-nums text-teal">
+                        {toLatinDigits(index + 1)}.
+                      </span>
+                      <span className="font-bold text-navy">{apt.fullName}</span>
+                    </li>
+                  ))}
+                </ol>
                 {visibleMorning.map((apt, index) => (
                   <SecretaryScheduledBar
                     key={apt.id}
@@ -145,6 +157,19 @@ export function SecretaryTodayAppointmentsDrop({
                     {CLINIC_SHIFT_HOURS.EVENING.end}
                   </span>
                 </p>
+                <ol className="rounded-xl border border-border/80 bg-[#F8FBFC] px-3 py-2 text-sm">
+                  {visibleEvening.map((apt, index) => (
+                    <li
+                      key={`name-e-${apt.id}`}
+                      className="flex gap-2 border-b border-border/50 py-1.5 last:border-0"
+                    >
+                      <span className="font-latin w-6 shrink-0 font-bold tabular-nums text-teal">
+                        {toLatinDigits(index + 1)}.
+                      </span>
+                      <span className="font-bold text-navy">{apt.fullName}</span>
+                    </li>
+                  ))}
+                </ol>
                 {visibleEvening.map((apt, index) => (
                   <SecretaryScheduledBar
                     key={apt.id}
@@ -157,9 +182,7 @@ export function SecretaryTodayAppointmentsDrop({
                     doctorName={apt.doctorName}
                     startAtIso={apt.startAtIso}
                     appointmentTypeLabel={apt.appointmentTypeLabel}
-                    queueOrder={
-                      visibleMorning.length + index + 1
-                    }
+                    queueOrder={index + 1}
                     doctors={doctors}
                     csrfToken={csrfToken}
                   />
