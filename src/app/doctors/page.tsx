@@ -57,11 +57,24 @@ export default async function DoctorsPage() {
                 <h2 className="text-xl font-bold text-navy">{doctor.user.fullName}</h2>
                 <p className="mt-2 text-sm text-muted">{doctor.specialtyAr}</p>
                 <ul className="mt-4 space-y-1 text-sm">
-                  {doctor.workingHours.map((wh) => (
-                    <li key={wh.id} className="font-latin">
-                      {dayOfWeekAr[wh.dayOfWeek]}: {wh.startTime}–{wh.endTime}
-                    </li>
-                  ))}
+                  {doctor.workingHours.map((wh) => {
+                    const period =
+                      wh.shift === "EVENING"
+                        ? "مساء"
+                        : wh.shift === "MORNING"
+                          ? "صباح"
+                          : "دوام";
+                    return (
+                      <li key={wh.id}>
+                        <span className="font-semibold text-navy">
+                          {dayOfWeekAr[wh.dayOfWeek]} — {period}:{" "}
+                        </span>
+                        <span className="font-latin text-muted">
+                          {wh.startTime}–{wh.endTime}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </Card>
             ))

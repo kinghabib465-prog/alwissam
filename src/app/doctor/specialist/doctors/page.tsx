@@ -57,12 +57,6 @@ export default async function SpecialistDoctorsPage() {
                   doc.user.status === "ACTIVE" &&
                   !isOwner &&
                   doc.userId !== user.id;
-                const shifts = [...new Set(doc.workingHours.map((h) => h.shift))];
-                const defaultShift =
-                  shifts[0] || (doc.type === "SPECIALIST" ? "MORNING" : "DAY");
-                const primary = doc.workingHours.filter(
-                  (h) => h.shift === defaultShift,
-                );
                 return (
                   <DoctorStaffBar
                     key={doc.id}
@@ -77,8 +71,7 @@ export default async function SpecialistDoctorsPage() {
                     isOwner={isOwner}
                     canDelete={canDelete}
                     csrfToken={user.csrfToken}
-                    defaultShift={defaultShift}
-                    initialHours={primary.map((h) => ({
+                    initialHours={doc.workingHours.map((h) => ({
                       dayOfWeek: h.dayOfWeek,
                       shift: h.shift,
                       startTime: h.startTime,

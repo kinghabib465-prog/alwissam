@@ -114,12 +114,15 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "الطبيب مطلوب" }, { status: 400 });
     }
 
+    const allowedShifts = new Set(["MORNING", "EVENING", "DAY"]);
+
     await prisma.$transaction(async (tx) => {
       for (const row of hours) {
         const dayOfWeek = String(row.dayOfWeek) as DayOfWeek;
-        const shift = String(row.shift || "DAY");
-        const startTime = String(row.startTime || "09:00");
-        const endTime = String(row.endTime || "17:00");
+        const shiftRaw = String(row.shift || "MORNING").toUpperCase();
+        const shift = allowedShifts.has(shiftRaw) ? shiftRaw : "MORNING";
+        const startTime = String(row.startTime || "08:00");
+        const endTime = String(row.endTime || "13:30");
         const isActive = !!row.isActive;
         if (!Object.values(DayOfWeek).includes(dayOfWeek)) continue;
 
@@ -140,7 +143,7 @@ export async function PUT(req: NextRequest) {
       entityType: "Doctor",
       entityId: doctorId,
       newValue: { hours: hours as object },
-      reason: `تحديث مواعيد العمل بواسطة ${user.fullName}`,
+      reason: `تحديث مواعيد العمل (صباح/مساء) بواسطة ${user.fullName}`,
     });
     return NextResponse.json({ ok: true });
   }

@@ -28,7 +28,6 @@ export function DoctorStaffBar({
   isOwner,
   canDelete,
   csrfToken,
-  defaultShift,
   initialHours,
 }: {
   userId: string;
@@ -42,7 +41,8 @@ export function DoctorStaffBar({
   isOwner: boolean;
   canDelete: boolean;
   csrfToken: string;
-  defaultShift: string;
+  /** @deprecated لم يعد مستخدماً — الدوام مزدوج صباح/مساء */
+  defaultShift?: string;
   initialHours: HourRow[];
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -106,7 +106,6 @@ export function DoctorStaffBar({
             csrfToken={csrfToken}
             doctorId={doctorId}
             doctorName={name}
-            defaultShift={defaultShift}
             initialHours={initialHours}
           />
         </div>
