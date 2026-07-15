@@ -48,7 +48,12 @@ export const bookAppointmentSchema = z.object({
   consentAccepted: z.boolean().refine((v) => v === true, {
     message: "يجب الموافقة على الشروط",
   }),
-});
+}).refine(
+  (data) =>
+    data.appointmentType !== "OTHER" ||
+    (data.reason && data.reason.trim().length >= 2),
+  { message: "اكتب سبب الزيارة عند اختيار «أخرى»", path: ["reason"] },
+);
 
 export const paymentSchema = z.object({
   invoiceId: z.string().min(1),

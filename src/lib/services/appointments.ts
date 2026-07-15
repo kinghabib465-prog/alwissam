@@ -252,6 +252,13 @@ export async function updateReceptionRequestInfo(params: {
       ? params.reason?.trim() || service?.nameAr || existing.reason
       : existing.reason;
 
+  if (nextType === "OTHER") {
+    const custom = nextReason?.trim();
+    if (!custom || custom.length < 2) {
+      throw new Error("اكتب سبب الزيارة عند اختيار «أخرى»");
+    }
+  }
+
   const updated = await prisma.appointmentRequest.update({
     where: { id: params.requestId },
     data: {

@@ -11,11 +11,27 @@ export const dynamic = "force-dynamic";
 export default async function SpecialistDoctorsPage() {
   const user = await requireUser(["ADMIN", "DOCTOR_SPECIALIST"]);
   const doctors = await prisma.doctor.findMany({
+    where: {
+      isActive: true,
+      user: { deletedAt: null, status: "ACTIVE" },
+    },
     include: {
       user: { include: { role: true } },
       workingHours: { orderBy: [{ dayOfWeek: "asc" }, { shift: "asc" }] },
     },
     orderBy: { createdAt: "asc" },
+  });
+
+  // حساب واحد لصاحبة العيادة — إخفاء أي تكرار بالاسم
+  const seenOwner = new Set<string>();
+  const uniqueDoctors = doctors.filter((doc) => {
+    const key = doc.user.fullName
+      .replace(/الدكتور|د\.|دكتور/gi, "")
+      .replace(/\s+/g, "")
+      .toLowerCase();
+    if (seenOwner.has(key)) return false;
+    seenOwner.add(key);
+    return true;
   });
 
   return (
@@ -31,11 +47,11 @@ export default async function SpecialistDoctorsPage() {
         </Card>
         <Card>
           <h2 className="mb-3 font-bold text-navy">الحسابات الحالية</h2>
-          {doctors.length === 0 ? (
+          {uniqueDoctors.length === 0 ? (
             <EmptyState title="لا يوجد أطباء" />
           ) : (
             <div className="space-y-3">
-              {doctors.map((doc) => {
+              {uniqueDoctors.map((doc) => {
                 const isOwner = doc.user.role.code === "ADMIN";
                 const canDelete =
                   doc.user.status === "ACTIVE" &&

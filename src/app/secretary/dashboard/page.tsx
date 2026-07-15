@@ -54,7 +54,6 @@ export default async function SecretaryDashboardPage() {
 
   const present = doctors.filter((d) => d.workingHours.length > 0);
   const doctorSource = present.length > 0 ? present : doctors;
-  // طبيب واحد لكل اسم — يزيل تكرار منانة إن بقي نشطاً مؤقتاً
   const seenNames = new Set<string>();
   const doctorOpts = doctorSource
     .map((d) => ({
@@ -63,7 +62,10 @@ export default async function SecretaryDashboardPage() {
       type: d.type,
     }))
     .filter((d) => {
-      const key = d.name.replace(/\s+/g, "").toLowerCase();
+      const key = d.name
+        .replace(/الدكتور|د\.|دكتور/gi, "")
+        .replace(/\s+/g, "")
+        .toLowerCase();
       if (seenNames.has(key)) return false;
       seenNames.add(key);
       return true;

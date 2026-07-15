@@ -4,7 +4,11 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { FormField, Input, Select } from "@/components/ui/Form";
-import { VISIT_REASONS, visitReasonLabel } from "@/lib/visit-reasons";
+import {
+  VISIT_REASONS,
+  isOtherVisitReason,
+  resolveVisitReason,
+} from "@/lib/visit-reasons";
 
 /** تسجيل عند المدخل — مع سبب الزيارة */
 export function SecretaryWalkInForm({ csrfToken }: { csrfToken: string }) {
@@ -19,11 +23,16 @@ export function SecretaryWalkInForm({ csrfToken }: { csrfToken: string }) {
     city: "",
     chronicIllnesses: "",
     appointmentType: "GENERAL_EXAM",
+    customReason: "",
     isFirstVisit: true,
   });
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (isOtherVisitReason(form.appointmentType) && !form.customReason.trim()) {
+      setError("اكتب سبب الزيارة عند اختيار «أخرى»");
+      return;
+    }
     setLoading(true);
     setError("");
     const res = await fetch("/api/secretary/walk-in", {
@@ -39,7 +48,7 @@ export function SecretaryWalkInForm({ csrfToken }: { csrfToken: string }) {
         city: form.city || undefined,
         chronicIllnesses: form.chronicIllnesses || undefined,
         appointmentType: form.appointmentType,
-        reason: visitReasonLabel(form.appointmentType),
+        reason: resolveVisitReason(form.appointmentType, form.customReason),
         isEmergency: form.appointmentType === "EMERGENCY",
         isFirstVisit: form.isFirstVisit,
       }),
@@ -57,6 +66,7 @@ export function SecretaryWalkInForm({ csrfToken }: { csrfToken: string }) {
       city: "",
       chronicIllnesses: "",
       appointmentType: "GENERAL_EXAM",
+      customReason: "",
       isFirstVisit: true,
     });
     setOpen(false);
@@ -101,7 +111,12 @@ export function SecretaryWalkInForm({ csrfToken }: { csrfToken: string }) {
         <Select
           value={form.appointmentType}
           onChange={(e) =>
-            setForm({ ...form, appointmentType: e.target.value })
+            setForm({
+              ...form,
+              appointmentType: e.target.value,
+              customReason:
+                e.target.value === "OTHER" ? form.customReason : "",
+            })
           }
           required
         >
@@ -112,6 +127,19 @@ export function SecretaryWalkInForm({ csrfToken }: { csrfToken: string }) {
           ))}
         </Select>
       </FormField>
+      {isOtherVisitReason(form.appointmentType) && (
+        <FormField label="اكتب سبب الزيارة">
+          <Input
+            value={form.customReason}
+            onChange={(e) =>
+              setForm({ ...form, customReason: e.target.value })
+            }
+            placeholder="مثال: ألم في اللثة، كسر في السن..."
+            required
+            minLength={2}
+          />
+        </FormField>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <FormField label="العمر">
           <Input

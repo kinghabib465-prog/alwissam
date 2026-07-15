@@ -40,6 +40,13 @@ export async function POST(req: NextRequest) {
     ? (typeRaw as AppointmentType)
     : AppointmentType.GENERAL_EXAM;
 
+  if (appointmentType === AppointmentType.OTHER && reason.length < 2) {
+    return NextResponse.json(
+      { error: "اكتب سبب الزيارة عند اختيار «أخرى»" },
+      { status: 400 },
+    );
+  }
+
   const age =
     ageRaw !== undefined && ageRaw !== "" && ageRaw !== null
       ? Number(ageRaw)

@@ -7,8 +7,12 @@ import { Button } from "@/components/ui/Button";
 import { FormField, Input, Select } from "@/components/ui/Form";
 import { splitPatientName } from "@/lib/patient-name";
 import { toLatinDigits } from "@/lib/latin-digits";
-import { appointmentTypeAr } from "@/i18n/ar";
-import { VISIT_REASONS, visitReasonLabel } from "@/lib/visit-reasons";
+import {
+  VISIT_REASONS,
+  initialCustomReason,
+  isOtherVisitReason,
+  resolveVisitReason,
+} from "@/lib/visit-reasons";
 
 type DoctorOpt = { id: string; name: string; type: string };
 
@@ -56,13 +60,13 @@ export function SecretaryRequestBar({
     city: city || "",
     chronicIllnesses: chronicIllnesses || "",
     appointmentType: appointmentType || "GENERAL_EXAM",
+    customReason: initialCustomReason(appointmentType, reason),
     isFirstVisit: !isPreviousPatient,
   });
 
   const { firstName, lastName } = splitPatientName(form.fullName);
   const typeLabel =
-    visitReasonLabel(form.appointmentType) ||
-    (appointmentType && appointmentTypeAr[appointmentType]) ||
+    resolveVisitReason(form.appointmentType, form.customReason) ||
     reason ||
     "";
 
@@ -88,6 +92,13 @@ export function SecretaryRequestBar({
   }
 
   async function saveInfo() {
+    if (
+      isOtherVisitReason(form.appointmentType) &&
+      !form.customReason.trim()
+    ) {
+      setError("اكتب سبب الزيارة عند اختيار «أخرى»");
+      return;
+    }
     const data = await api("update", {
       fullName: form.fullName.trim(),
       phone: form.phone.trim(),
@@ -95,7 +106,7 @@ export function SecretaryRequestBar({
       city: form.city,
       chronicIllnesses: form.chronicIllnesses,
       appointmentType: form.appointmentType,
-      reason: visitReasonLabel(form.appointmentType),
+      reason: resolveVisitReason(form.appointmentType, form.customReason),
       isFirstVisit: form.isFirstVisit,
     });
     if (!data) return;
@@ -206,7 +217,12 @@ export function SecretaryRequestBar({
             <Select
               value={form.appointmentType}
               onChange={(e) =>
-                setForm({ ...form, appointmentType: e.target.value })
+                setForm({
+                  ...form,
+                  appointmentType: e.target.value,
+                  customReason:
+                    e.target.value === "OTHER" ? form.customReason : "",
+                })
               }
             >
               {VISIT_REASONS.map((r) => (
@@ -216,6 +232,19 @@ export function SecretaryRequestBar({
               ))}
             </Select>
           </FormField>
+          {isOtherVisitReason(form.appointmentType) && (
+            <FormField label="اكتب سبب الزيارة">
+              <Input
+                value={form.customReason}
+                onChange={(e) =>
+                  setForm({ ...form, customReason: e.target.value })
+                }
+                placeholder="مثال: ألم في اللثة، كسر في السن..."
+                required
+                minLength={2}
+              />
+            </FormField>
+          )}
           <FormField label="مرض تعاني منه">
             <Input
               value={form.chronicIllnesses}

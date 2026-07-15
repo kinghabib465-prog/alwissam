@@ -3,8 +3,11 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { FormField, Input, Select } from "@/components/ui/Form";
-import { appointmentTypeAr } from "@/i18n/ar";
-import { VISIT_REASONS } from "@/lib/visit-reasons";
+import {
+  VISIT_REASONS,
+  isOtherVisitReason,
+  resolveVisitReason,
+} from "@/lib/visit-reasons";
 
 /** نموذج التسجيل عند المدخل — يُستخدم في الرئيسية */
 export function PublicRegisterForm() {
@@ -20,20 +23,25 @@ export function PublicRegisterForm() {
     lastName: "",
     phone: "",
     appointmentType: "GENERAL_EXAM",
+    customReason: "",
     consentAccepted: false,
   });
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (isOtherVisitReason(form.appointmentType) && !form.customReason.trim()) {
+      setError("اكتب سبب الزيارة عند اختيار «أخرى»");
+      return;
+    }
     setLoading(true);
     setError("");
     setSuccess(null);
     try {
       const fullName = `${form.firstName.trim()} ${form.lastName.trim()}`.trim();
-      const reasonLabel =
-        reasons.find((r) => r.value === form.appointmentType)?.label ||
-        appointmentTypeAr[form.appointmentType] ||
-        "تسجيل عند المدخل";
+      const reasonLabel = resolveVisitReason(
+        form.appointmentType,
+        form.customReason,
+      );
       const res = await fetch("/api/public/appointments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -60,6 +68,7 @@ export function PublicRegisterForm() {
         lastName: "",
         phone: "",
         appointmentType: "GENERAL_EXAM",
+        customReason: "",
         consentAccepted: false,
       });
     } catch {
@@ -84,7 +93,7 @@ export function PublicRegisterForm() {
             {success.requestNumber}
           </p>
         )}
-            <p className="mt-1 text-sm text-navy/80">ترتيبك اليوم</p>
+        <p className="mt-1 text-sm text-navy/80">ترتيبك اليوم</p>
         <p className="mt-3 text-sm text-navy/80">
           انتظر عند المدخل — السكرتارية ستوجّهك.
         </p>
@@ -136,7 +145,12 @@ export function PublicRegisterForm() {
           id="visitReason"
           value={form.appointmentType}
           onChange={(e) =>
-            setForm({ ...form, appointmentType: e.target.value })
+            setForm({
+              ...form,
+              appointmentType: e.target.value,
+              customReason:
+                e.target.value === "OTHER" ? form.customReason : "",
+            })
           }
           required
         >
@@ -147,6 +161,21 @@ export function PublicRegisterForm() {
           ))}
         </Select>
       </FormField>
+
+      {isOtherVisitReason(form.appointmentType) && (
+        <FormField label="اكتب سبب الزيارة" htmlFor="customReason">
+          <Input
+            id="customReason"
+            value={form.customReason}
+            onChange={(e) =>
+              setForm({ ...form, customReason: e.target.value })
+            }
+            placeholder="مثال: ألم في اللثة، كسر في السن..."
+            required
+            minLength={2}
+          />
+        </FormField>
+      )}
 
       <label className="flex items-start gap-2 text-sm">
         <input

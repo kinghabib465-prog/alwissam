@@ -210,22 +210,25 @@ export async function ensureStaff() {
       },
     });
 
-    // إزالة تكرار «منانة» إن وُجد حساب طبيب مكرر من seed قديم
+    // إزالة تكرار «منانة» — الإبقاء على الحساب الرسمي فقط
+    const canonEmail = env("SEED_DOCTOR_SPECIALIST_EMAIL").toLowerCase();
+    const canonPhone = env("SEED_DOCTOR_SPECIALIST_PHONE");
     const mananaDupes = await prisma.doctor.findMany({
       where: {
-        id: { not: specialist.id },
-        isActive: true,
+        userId: { not: specialistUser.id },
+        user: { deletedAt: null },
         OR: [
           { user: { fullName: { contains: "منانة" } } },
           { user: { email: { contains: "manana", mode: "insensitive" } } },
+          ...(canonPhone ? [{ user: { phone: canonPhone } }] : []),
         ],
       },
       include: { user: { select: { id: true, email: true, fullName: true } } },
     });
     for (const dup of mananaDupes) {
-      // لا تمس طبيباً آخر ليس منانة — التصفية أعلاه كافية
+      if (dup.user.email?.toLowerCase() === canonEmail) continue;
       console.warn(
-        `[ensure-staff] deactivating duplicate Manana doctor ${dup.id} (${dup.user.email})`,
+        `[ensure-staff] deactivating duplicate owner doctor ${dup.id} (${dup.user.email || dup.user.fullName})`,
       );
       await prisma.doctor.update({
         where: { id: dup.id },
@@ -235,6 +238,24 @@ export async function ensureStaff() {
         where: { id: dup.userId },
         data: { status: "INACTIVE", deletedAt: new Date() },
       });
+    }
+
+    // حساب أدمن قديم منفصل — يُعطَّل دائماً
+    const legacyAdminEmail = process.env.SEED_ADMIN_EMAIL;
+    if (legacyAdminEmail) {
+      const legacy = await prisma.user.findUnique({
+        where: { email: legacyAdminEmail },
+      });
+      if (legacy && legacy.id !== specialistUser.id) {
+        await prisma.user.update({
+          where: { id: legacy.id },
+          data: { status: "INACTIVE", deletedAt: new Date() },
+        });
+        await prisma.doctor.updateMany({
+          where: { userId: legacy.id },
+          data: { isActive: false },
+        });
+      }
     }
 
     const generalPassword = await bcrypt.hash(
