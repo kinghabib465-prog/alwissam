@@ -155,7 +155,7 @@ export async function PATCH(req: NextRequest) {
       body.workStartTime || target.secretary.workStartTime || "07:00",
     );
     let workEndTime = String(
-      body.workEndTime || target.secretary.workEndTime || "14:30",
+      body.workEndTime || target.secretary.workEndTime || "14:00",
     );
     const workDaysRaw =
       body.workDays ?? target.secretary.workDays ?? "SUN,MON,TUE,WED,THU,SAT";

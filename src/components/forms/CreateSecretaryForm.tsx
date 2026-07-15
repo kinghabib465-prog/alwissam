@@ -76,7 +76,7 @@ export function CreateSecretaryForm({ csrfToken }: { csrfToken: string }) {
           value={form.shiftCode}
           onChange={(e) => setForm({ ...form, shiftCode: e.target.value })}
         >
-          <option value="MORNING">صباحي 07:00–14:30</option>
+          <option value="MORNING">صباحي 07:00–14:00</option>
           <option value="EVENING">مسائي 16:00–22:00</option>
         </Select>
       </FormField>

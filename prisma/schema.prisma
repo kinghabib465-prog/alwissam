@@ -371,7 +371,7 @@ model SecretaryProfile {
   /// MORNING | EVENING | CUSTOM
   shiftCode      String   @default("MORNING")
   workStartTime  String   @default("07:00")
-  workEndTime    String   @default("14:30")
+  workEndTime    String   @default("14:00")
   /// أيام العمل مفصولة بفاصلة: SUN,MON,TUE,WED,THU,SAT
   workDays       String   @default("SUN,MON,TUE,WED,THU,SAT")
   createdAt      DateTime @default(now())

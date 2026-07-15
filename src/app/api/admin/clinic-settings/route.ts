@@ -121,8 +121,8 @@ export async function PUT(req: NextRequest) {
         const dayOfWeek = String(row.dayOfWeek) as DayOfWeek;
         const shiftRaw = String(row.shift || "MORNING").toUpperCase();
         const shift = allowedShifts.has(shiftRaw) ? shiftRaw : "MORNING";
-        const startTime = String(row.startTime || "08:00");
-        const endTime = String(row.endTime || "13:30");
+        const startTime = String(row.startTime || "07:00");
+        const endTime = String(row.endTime || "14:00");
         const isActive = !!row.isActive;
         if (!Object.values(DayOfWeek).includes(dayOfWeek)) continue;
 

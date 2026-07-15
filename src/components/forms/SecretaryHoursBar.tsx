@@ -122,7 +122,7 @@ export function SecretaryHoursBar({
   const [loading, setLoading] = useState(false);
   const [shift, setShift] = useState(shiftCode || "MORNING");
   const [start, setStart] = useState(workStartTime || "07:00");
-  const [end, setEnd] = useState(workEndTime || "14:30");
+  const [end, setEnd] = useState(workEndTime || "14:00");
   const [msg, setMsg] = useState("");
 
   async function saveHours(nextShift: string, nextStart: string, nextEnd: string) {

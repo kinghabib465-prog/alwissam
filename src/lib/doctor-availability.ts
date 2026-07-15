@@ -187,6 +187,6 @@ export function periodFromStartAt(date: Date | string): WorkShift {
     }).format(d),
   );
   if (!Number.isFinite(hour)) return "MORNING";
-  if (hour >= 14) return "EVENING";
+  if (hour >= 16) return "EVENING";
   return "MORNING";
 }

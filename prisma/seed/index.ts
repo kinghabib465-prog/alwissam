@@ -193,14 +193,14 @@ async function main() {
       employeeCode: "SEC-001",
       shiftCode: "MORNING",
       workStartTime: "07:00",
-      workEndTime: "14:30",
+      workEndTime: "14:00",
     },
     create: {
       userId: secretaryUser.id,
       employeeCode: "SEC-001",
       shiftCode: "MORNING",
       workStartTime: "07:00",
-      workEndTime: "14:30",
+      workEndTime: "14:00",
     },
   });
 
@@ -301,13 +301,13 @@ async function main() {
           shift: "MORNING",
         },
       },
-      update: { startTime: "08:00", endTime: "13:30", isActive: true },
+      update: { startTime: "07:00", endTime: "14:00", isActive: true },
       create: {
         doctorId: specialist.id,
         dayOfWeek: day,
         shift: "MORNING",
-        startTime: "08:00",
-        endTime: "13:30",
+        startTime: "07:00",
+        endTime: "14:00",
       },
     });
     await prisma.workingHour.upsert({
@@ -318,13 +318,13 @@ async function main() {
           shift: "EVENING",
         },
       },
-      update: { startTime: "17:00", endTime: "21:00", isActive: true },
+      update: { startTime: "16:00", endTime: "22:00", isActive: true },
       create: {
         doctorId: specialist.id,
         dayOfWeek: day,
         shift: "EVENING",
-        startTime: "17:00",
-        endTime: "21:00",
+        startTime: "16:00",
+        endTime: "22:00",
       },
     });
   }
@@ -343,39 +343,77 @@ async function main() {
         doctorId_dayOfWeek_shift: {
           doctorId: general.id,
           dayOfWeek: day,
+          shift: "MORNING",
+        },
+      },
+      update: { startTime: "07:00", endTime: "14:00", isActive: true },
+      create: {
+        doctorId: general.id,
+        dayOfWeek: day,
+        shift: "MORNING",
+        startTime: "07:00",
+        endTime: "14:00",
+        isActive: true,
+      },
+    });
+    await prisma.workingHour.upsert({
+      where: {
+        doctorId_dayOfWeek_shift: {
+          doctorId: general.id,
+          dayOfWeek: day,
+          shift: "EVENING",
+        },
+      },
+      update: { startTime: "16:00", endTime: "22:00", isActive: true },
+      create: {
+        doctorId: general.id,
+        dayOfWeek: day,
+        shift: "EVENING",
+        startTime: "16:00",
+        endTime: "22:00",
+        isActive: true,
+      },
+    });
+    await prisma.workingHour.upsert({
+      where: {
+        doctorId_dayOfWeek_shift: {
+          doctorId: general.id,
+          dayOfWeek: day,
           shift: "DAY",
         },
       },
-      update: { startTime: "09:00", endTime: "17:00", isActive: true },
+      update: { isActive: false },
       create: {
         doctorId: general.id,
         dayOfWeek: day,
         shift: "DAY",
-        startTime: "09:00",
-        endTime: "17:00",
-        isActive: true,
+        startTime: "07:00",
+        endTime: "14:00",
+        isActive: false,
       },
     });
   }
 
-  await prisma.workingHour.upsert({
-    where: {
-      doctorId_dayOfWeek_shift: {
+  for (const shift of ["DAY", "MORNING", "EVENING"] as const) {
+    await prisma.workingHour.upsert({
+      where: {
+        doctorId_dayOfWeek_shift: {
+          doctorId: general.id,
+          dayOfWeek: DayOfWeek.FRIDAY,
+          shift,
+        },
+      },
+      update: { isActive: false },
+      create: {
         doctorId: general.id,
         dayOfWeek: DayOfWeek.FRIDAY,
-        shift: "DAY",
+        shift,
+        startTime: shift === "EVENING" ? "16:00" : "07:00",
+        endTime: shift === "EVENING" ? "22:00" : "14:00",
+        isActive: false,
       },
-    },
-    update: { isActive: false, startTime: "00:00", endTime: "00:00" },
-    create: {
-      doctorId: general.id,
-      dayOfWeek: DayOfWeek.FRIDAY,
-      shift: "DAY",
-      startTime: "00:00",
-      endTime: "00:00",
-      isActive: false,
-    },
-  });
+    });
+  }
 
   const templates = [
     {

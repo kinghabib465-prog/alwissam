@@ -44,8 +44,8 @@ export const SHIFT_PRESETS = {
   MORNING: {
     label: "صباحي",
     start: "07:00",
-    end: "14:30",
-    loginUntil: "14:30",
+    end: "14:00",
+    loginUntil: "14:00",
   },
   EVENING: {
     label: "مسائي",

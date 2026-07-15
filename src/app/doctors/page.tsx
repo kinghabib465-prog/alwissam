@@ -40,7 +40,7 @@ export default async function DoctorsPage() {
                   تقويم الأسنان · التركيبات · الجراحة · الحالات متعددة الحصص
                 </p>
                 <p className="mt-3 text-sm">الأحد، الإثنين، الثلاثاء</p>
-                <p className="font-latin text-sm">08:00–13:30 · 17:00–21:00</p>
+                <p className="font-latin text-sm">07:00–14:00 · 16:00–22:00</p>
               </Card>
               <Card>
                 <h2 className="text-xl font-bold text-navy">الدكتور قعري أسامة</h2>

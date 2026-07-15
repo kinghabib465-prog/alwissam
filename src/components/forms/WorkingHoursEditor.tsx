@@ -21,8 +21,16 @@ type DayShiftState = {
   evening: { startTime: string; endTime: string; isActive: boolean };
 };
 
-const DEFAULT_MORNING = { startTime: "08:00", endTime: "13:30", isActive: false };
-const DEFAULT_EVENING = { startTime: "17:00", endTime: "21:00", isActive: false };
+const DEFAULT_MORNING = {
+  startTime: "07:00",
+  endTime: "14:00",
+  isActive: false,
+};
+const DEFAULT_EVENING = {
+  startTime: "16:00",
+  endTime: "22:00",
+  isActive: false,
+};
 
 function buildDayState(initialHours: HourRow[]): DayShiftState[] {
   return DAYS_ORDER.map((day) => {
@@ -153,8 +161,8 @@ export function WorkingHoursEditor({
       hours.push({
         dayOfWeek: d.dayOfWeek,
         shift: "DAY",
-        startTime: "09:00",
-        endTime: "17:00",
+        startTime: "07:00",
+        endTime: "14:00",
         isActive: false,
       });
     }
@@ -185,7 +193,9 @@ export function WorkingHoursEditor({
     <div className="rounded-2xl border border-border p-4">
       <p className="mb-1 font-bold text-navy">{doctorName}</p>
       <p className="mb-3 text-xs text-muted">
-        لكل يوم: دوام صباحي و/أو مسائي — اختاري الأيام والساعات لكل فترة
+        لكل يوم: صباحي ({DEFAULT_MORNING.startTime}–{DEFAULT_MORNING.endTime})
+      و/أو مسائي ({DEFAULT_EVENING.startTime}–{DEFAULT_EVENING.endTime}) —
+      عدّلي الساعات حسب جدول الطبيب
       </p>
 
       <div className="mb-2 hidden grid-cols-[7rem_1fr_1fr] gap-2 text-xs font-bold text-muted sm:grid">
