@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth/current-user";
 import { prisma } from "@/lib/db/prisma";
 import { DashboardShell, TopHeader } from "@/components/layout/DashboardShell";
 import { appointmentTypeAr, navSecretaryAr } from "@/i18n/ar";
+import { formatAppointmentReasonLabel } from "@/lib/appointment-notes";
 import { SecretaryAutoRefresh } from "@/components/secretary/SecretaryAutoRefresh";
 import {
   SecretaryReceptionHub,
@@ -43,8 +44,10 @@ function mapApt(
     doctorId: apt.doctorId,
     doctorName: apt.doctor.user.fullName,
     startAtIso: apt.startAt.toISOString(),
-    appointmentTypeLabel:
-      appointmentTypeAr[apt.appointmentType] || apt.appointmentType,
+    appointmentTypeLabel: formatAppointmentReasonLabel(
+      apt.appointmentType,
+      apt.notes,
+    ),
     period:
       period === "EVENING"
         ? ("EVENING" as const)

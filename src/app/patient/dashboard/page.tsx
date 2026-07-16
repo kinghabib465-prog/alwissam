@@ -3,7 +3,8 @@ import { prisma } from "@/lib/db/prisma";
 import { ClinicLogo } from "@/components/branding/ClinicLogo";
 import { AppointmentCountdown } from "@/components/dashboard/AppointmentCountdown";
 import { PatientContactBanner } from "@/components/patient/PatientContactBanner";
-import { formatClinicAppointmentDay } from "@/lib/clinic-date";
+import { formatClinicAppointmentPeriod } from "@/lib/clinic-date";
+import { periodFromStartAt } from "@/lib/doctor-availability";
 import { loadClinicContact } from "@/lib/clinic-contact";
 import { toLatinDigits } from "@/lib/latin-digits";
 
@@ -49,7 +50,12 @@ export default async function PatientDashboardPage() {
 
   const targetDate =
     nextAppointment?.startAt || ortho?.nextAppointment || null;
-  const dayLabel = targetDate ? formatClinicAppointmentDay(targetDate) : null;
+  const dayLabel = targetDate
+    ? formatClinicAppointmentPeriod(
+        targetDate,
+        periodFromStartAt(targetDate),
+      )
+    : null;
 
   return (
     <div className="min-h-screen bg-[#F4F8FA]">
@@ -83,7 +89,7 @@ export default async function PatientDashboardPage() {
 
         {/* الموعد */}
         <section className="rounded-2xl border border-border bg-white px-5 py-6 text-center shadow-sm">
-          <p className="text-sm text-muted">تاريخ الموعد القادم</p>
+          <p className="text-sm text-muted">الموعد القادم — اليوم والفترة</p>
           {dayLabel ? (
             <p
               className="mt-3 text-xl font-bold leading-relaxed text-navy"

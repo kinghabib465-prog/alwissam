@@ -11,6 +11,15 @@ import {
   normalizeShift,
   type WorkShift,
 } from "@/lib/doctor-availability";
+import {
+  buildDoctorAppointmentNotes,
+  validateDoctorAppointmentReason,
+} from "@/lib/appointment-notes";
+import {
+  defaultAppointmentTypeForDoctor,
+  appointmentTypeRestrictionError,
+} from "@/lib/doctor-appointment-types";
+import { isClinicOwner } from "@/lib/auth/clinic-owner";
 
 const DAY_MAP: DayOfWeek[] = [
   "SUNDAY",
@@ -108,8 +117,12 @@ export async function POST(req: NextRequest) {
   const patientId = String(body.patientId || "");
   const dateStr = String(body.date || "");
   const shiftRaw = body.shift != null ? String(body.shift) : "";
-  const typeRaw = String(body.appointmentType || "ORTHO_FOLLOWUP");
-  const notes = String(body.notes || "").trim();
+  const typeRaw = String(
+    body.appointmentType ||
+      defaultAppointmentTypeForDoctor(isClinicOwner(user)),
+  );
+  const examReason = String(body.examReason || "").trim();
+  const customReason = String(body.customReason || "").trim();
   const forDoctorId = String(body.forDoctorId || "");
   const durationMinutes = Math.min(
     180,
@@ -149,7 +162,23 @@ export async function POST(req: NextRequest) {
   const validTypes = Object.values(AppointmentType);
   const appointmentType = validTypes.includes(typeRaw as AppointmentType)
     ? (typeRaw as AppointmentType)
-    : AppointmentType.ORTHO_FOLLOWUP;
+    : isClinicOwner(user)
+      ? AppointmentType.ORTHO_FOLLOWUP
+      : AppointmentType.GENERAL_EXAM;
+
+  const typeError = appointmentTypeRestrictionError(user, appointmentType);
+  if (typeError) {
+    return NextResponse.json({ error: typeError }, { status: 403 });
+  }
+
+  const reasonError = validateDoctorAppointmentReason(
+    appointmentType,
+    examReason,
+    customReason,
+  );
+  if (reasonError) {
+    return NextResponse.json({ error: reasonError }, { status: 400 });
+  }
 
   const bounds = await dayAppointmentBounds(
     doctor.id,
@@ -175,7 +204,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const noteLine = notes || periodNote(shift, user.fullName);
+  const noteLine = buildDoctorAppointmentNotes(appointmentType, {
+    examReason,
+    customReason,
+    periodNote: periodNote(shift, user.fullName),
+  });
   const { start: dayStart, end: dayEnd } = algiersYmdBounds(dateStr);
 
   /** موعد واحد للمريض في نفس اليوم — أي حجز لاحق يعدّل الموجود بدل إنشاء جديد */

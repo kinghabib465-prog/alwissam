@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { isClinicOwner } from "@/lib/auth/clinic-owner";
 import { prisma } from "@/lib/db/prisma";
 import { createAuditLog } from "@/lib/audit/log";
 import { hashPassword } from "@/lib/auth/password";
@@ -150,6 +151,57 @@ export async function DELETE(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const patientId = String(body.patientId || "");
   const scope = String(body.scope || "account");
+  if (!patientId && scope !== "appointment") {
+    return NextResponse.json({ error: "معرّف المريض مطلوب" }, { status: 400 });
+  }
+
+  if (scope === "appointment") {
+    if (!isClinicOwner(user)) {
+      return NextResponse.json(
+        { error: "صلاحية صاحبة العيادة فقط" },
+        { status: 403 },
+      );
+    }
+    const appointmentId = String(body.appointmentId || "");
+    if (!appointmentId) {
+      return NextResponse.json({ error: "معرّف الموعد مطلوب" }, { status: 400 });
+    }
+
+    const apt = await prisma.appointment.findUnique({
+      where: { id: appointmentId },
+    });
+    if (!apt || apt.deletedAt) {
+      return NextResponse.json({ error: "الموعد غير موجود" }, { status: 404 });
+    }
+
+    await prisma.appointment.update({
+      where: { id: appointmentId },
+      data: {
+        status: "CANCELLED_BY_CLINIC",
+        deletedAt: new Date(),
+        statusHistory: {
+          create: {
+            previousStatus: apt.status,
+            newStatus: "CANCELLED_BY_CLINIC",
+            changedById: user.id,
+            reason: `حذف الموعد بواسطة صاحبة العيادة ${user.fullName}`,
+          },
+        },
+      },
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      roleCode: user.role.code,
+      action: "APPOINTMENT_DELETED_BY_OWNER",
+      entityType: "Appointment",
+      entityId: appointmentId,
+      reason: `حذف موعد مريض بواسطة ${user.fullName}`,
+    });
+
+    return NextResponse.json({ ok: true, scope: "appointment" });
+  }
+
   if (!patientId) {
     return NextResponse.json({ error: "معرّف المريض مطلوب" }, { status: 400 });
   }
@@ -163,6 +215,13 @@ export async function DELETE(req: NextRequest) {
   }
 
   if (scope === "patient") {
+    if (!isClinicOwner(user)) {
+      return NextResponse.json(
+        { error: "صلاحية صاحبة العيادة فقط" },
+        { status: 403 },
+      );
+    }
+
     await prisma.$transaction(async (tx) => {
       if (patient.account) {
         await tx.user.update({

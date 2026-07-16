@@ -7,6 +7,7 @@ import { DoctorPatientsList } from "@/components/doctor/DoctorPatientsList";
 import { ClinicWorkflowGuide } from "@/components/doctor/ClinicWorkflowGuide";
 import { loadDoctorPatients } from "@/lib/doctor-patients";
 import { loadDoctorAvailability } from "@/lib/doctor-availability.server";
+import { isClinicOwner } from "@/lib/auth/clinic-owner";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,7 @@ export default async function SpecialistPatientsPage() {
             patients={patients}
             csrfToken={user.csrfToken}
             canManage
+            isClinicOwner={isClinicOwner(user)}
             availability={availability}
             generalAvailability={generalAvailability}
           />

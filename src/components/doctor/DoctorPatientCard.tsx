@@ -17,6 +17,14 @@ import { patientQrLoginUrl } from "@/lib/patient-qr";
 import { formatCurrencyDZD } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { ChevronDown, CalendarDays, UserRound, Wallet, QrCode } from "lucide-react";
+import {
+  parseExamReasonFromNotes,
+  validateDoctorAppointmentReason,
+} from "@/lib/appointment-notes";
+import {
+  appointmentTypesForDoctor,
+  defaultAppointmentTypeForDoctor,
+} from "@/lib/doctor-appointment-types";
 
 export type PatientPaymentRow = {
   id: string;
@@ -73,6 +81,7 @@ export function DoctorPatientCard({
   patient,
   csrfToken,
   canManage,
+  isClinicOwner,
   availability,
   expanded,
   onExpandedChange,
@@ -80,6 +89,8 @@ export function DoctorPatientCard({
   patient: PatientRowData;
   csrfToken: string;
   canManage?: boolean;
+  /** صاحبة العيادة — حذف أي موعد أو سجل */
+  isClinicOwner?: boolean;
   availability?: DoctorAvailability | null;
   generalAvailability?: DoctorAvailability | null;
   /** فتح مراقب من القائمة — مريض واحد فقط لتقليل التشويش */
@@ -114,7 +125,13 @@ export function DoctorPatientCard({
     phone: patient.phone || "",
     newPassword: "",
   });
-  const [apptType, setApptType] = useState("ORTHO_FOLLOWUP");
+  const [apptType, setApptType] = useState(() =>
+    defaultAppointmentTypeForDoctor(!!isClinicOwner),
+  );
+  const [examReason, setExamReason] = useState(() =>
+    parseExamReasonFromNotes(patient.lastNote),
+  );
+  const [customReason, setCustomReason] = useState("");
 
   const defaultDate = useMemo(() => {
     if (!availability) return "";
@@ -124,6 +141,7 @@ export function DoctorPatientCard({
   const [selectedDate, setSelectedDate] = useState(defaultDate);
   const [selectedShift, setSelectedShift] = useState<WorkShift>("MORNING");
   const finance = patient.finance;
+  const appointmentTypeOptions = appointmentTypesForDoctor(!!isClinicOwner);
 
   function openManage() {
     setOpen(true);
@@ -179,6 +197,15 @@ export function DoctorPatientCard({
         return;
       }
     }
+    const reasonError = validateDoctorAppointmentReason(
+      apptType,
+      examReason,
+      customReason,
+    );
+    if (reasonError) {
+      setError(reasonError);
+      return;
+    }
     // دائماً POST — السيرفر يحدّث موعد نفس اليوم بدل إنشاء مكرر
     const data = await api(
       "/api/doctor/schedule-appointment",
@@ -188,6 +215,8 @@ export function DoctorPatientCard({
         date: selectedDate,
         appointmentType: apptType,
         shift: selectedShift,
+        examReason: apptType === "GENERAL_EXAM" ? examReason : undefined,
+        customReason: apptType === "OTHER" ? customReason : undefined,
       },
     );
     if (!data) return;
@@ -264,6 +293,25 @@ export function DoctorPatientCard({
     });
     if (!data) return;
     setOk("تم حذف المريض");
+    router.refresh();
+  }
+
+  async function deleteAppointment() {
+    if (!patient.nextAppointmentId) return;
+    if (
+      !confirm(
+        "حذف الموعد القادم نهائياً؟ لن يظهر للسكرتارية وسيُلغى من النظام.",
+      )
+    ) {
+      return;
+    }
+    const data = await api("/api/doctor/patient", "DELETE", {
+      scope: "appointment",
+      appointmentId: patient.nextAppointmentId,
+      patientId: patient.id,
+    });
+    if (!data) return;
+    setOk("تم حذف الموعد");
     router.refresh();
   }
 
@@ -574,13 +622,40 @@ export function DoctorPatientCard({
                     >
                       {patient.hasAccount ? "الحساب و QR" : "إنشاء حساب"}
                     </Button>
-                    <button
-                      type="button"
-                      className="mr-auto text-xs text-danger hover:underline"
-                      onClick={deletePatient}
-                    >
-                      حذف من قائمتي
-                    </button>
+                  </div>
+                )}
+
+                {isClinicOwner && (
+                  <div className="rounded-xl border border-danger/30 bg-danger/5 p-3">
+                    <p className="mb-2 text-sm font-semibold text-danger">
+                      إدارة العيادة — صلاحية حذف
+                    </p>
+                    <p className="mb-3 text-xs text-muted">
+                      صلاحية كاملة — حذف أي موعد أو مريض أو سجل من النظام عند
+                      الحاجة.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {patient.nextAppointmentId && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-danger text-danger hover:bg-danger/10"
+                          loading={loading}
+                          onClick={deleteAppointment}
+                        >
+                          حذف الموعد القادم
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-danger text-danger hover:bg-danger/10"
+                        loading={loading}
+                        onClick={deletePatient}
+                      >
+                        حذف المريض من العيادة
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -594,6 +669,13 @@ export function DoctorPatientCard({
                   يعدّل نفس الموعد ولا ينشئ موعداً جديداً. يظهر للسكرتارية يوم
                   الموعد فقط (بدون فتح حساب).
                 </p>
+                {!isClinicOwner && (
+                  <p className="text-xs text-muted">
+                    كطبيب عام: يمكنك حجز <strong>فحص</strong> أو كتابة سبب مخصّص
+                    تحت <strong>أخرى</strong> فقط — التقويم والعمليات لصاحبة
+                    العيادة.
+                  </p>
+                )}
                 {availability && availability.workDays.length > 0 ? (
                   <AppointmentDatePicker
                     availability={availability}
@@ -609,22 +691,35 @@ export function DoctorPatientCard({
                   </p>
                 )}
                 <div className="flex flex-wrap gap-2">
-                  {[
-                    ["ORTHO_FOLLOWUP", "متابعة تقويم"],
-                    ["GENERAL_EXAM", "فحص"],
-                    ["POST_OP_FOLLOWUP", "بعد عملية"],
-                    ["OTHER", "أخرى"],
-                  ].map(([code, label]) => (
+                  {appointmentTypeOptions.map(({ value, label }) => (
                     <Button
-                      key={code}
+                      key={value}
                       size="sm"
-                      variant={apptType === code ? "teal" : "outline"}
-                      onClick={() => setApptType(code)}
+                      variant={apptType === value ? "teal" : "outline"}
+                      onClick={() => setApptType(value)}
                     >
                       {label}
                     </Button>
                   ))}
                 </div>
+                {apptType === "GENERAL_EXAM" && (
+                  <FormField label="سبب الفحص *">
+                    <Input
+                      value={examReason}
+                      onChange={(e) => setExamReason(e.target.value)}
+                      placeholder="مثال: ألم في الضرس السفلي، فحص دوري..."
+                    />
+                  </FormField>
+                )}
+                {apptType === "OTHER" && (
+                  <FormField label="سبب الموعد *">
+                    <Input
+                      value={customReason}
+                      onChange={(e) => setCustomReason(e.target.value)}
+                      placeholder="اكتب سبب الزيارة..."
+                    />
+                  </FormField>
+                )}
                 <div className="flex flex-wrap gap-2">
                   <Button
                     size="sm"
@@ -635,6 +730,17 @@ export function DoctorPatientCard({
                   >
                     حفظ الموعد
                   </Button>
+                  {isClinicOwner && patient.nextAppointmentId && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-danger text-danger"
+                      loading={loading}
+                      onClick={deleteAppointment}
+                    >
+                      حذف الموعد
+                    </Button>
+                  )}
                 </div>
               </div>
             )}

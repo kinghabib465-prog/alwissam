@@ -77,12 +77,14 @@ export function DoctorPatientsList({
   patients,
   csrfToken,
   canManage,
+  isClinicOwner,
   availability,
   generalAvailability,
 }: {
   patients: PatientRowData[];
   csrfToken: string;
   canManage?: boolean;
+  isClinicOwner?: boolean;
   availability?: DoctorAvailability | null;
   generalAvailability?: DoctorAvailability | null;
 }) {
@@ -221,6 +223,7 @@ export function DoctorPatientsList({
               patient={p}
               csrfToken={csrfToken}
               canManage={canManage}
+              isClinicOwner={isClinicOwner}
               availability={availability}
               generalAvailability={generalAvailability}
               expanded={openPatientId === p.id}
