@@ -4,7 +4,7 @@ import { isClinicOwner } from "@/lib/auth/clinic-owner";
 import { prisma } from "@/lib/db/prisma";
 import { hashPassword } from "@/lib/auth/password";
 import { createAuditLog } from "@/lib/audit/log";
-import { SHIFT_PRESETS } from "@/lib/secretary-shift";
+import { SHIFT_PRESETS, sanitizeWorkDays } from "@/lib/secretary-shift";
 
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
@@ -157,9 +157,16 @@ export async function PATCH(req: NextRequest) {
     let workEndTime = String(
       body.workEndTime || target.secretary.workEndTime || "14:00",
     );
-    const workDaysRaw =
-      body.workDays ?? target.secretary.workDays ?? "SUN,MON,TUE,WED,THU,SAT";
-    const workDays = String(workDaysRaw);
+    const workDays =
+      body.workDays !== undefined
+        ? sanitizeWorkDays(body.workDays)
+        : target.secretary.workDays || "SUN,MON,TUE,WED,THU,SAT";
+    if (!workDays) {
+      return NextResponse.json(
+        { error: "اختر يوم عمل واحداً على الأقل" },
+        { status: 400 },
+      );
+    }
 
     if (shiftCode === "MORNING") {
       workStartTime = SHIFT_PRESETS.MORNING.start;
@@ -184,6 +191,33 @@ export async function PATCH(req: NextRequest) {
       entityId: target.secretary.id,
       newValue: { shiftCode, workStartTime, workEndTime, workDays },
       reason: `تحديد أوقات عمل سكرتير بواسطة ${user.fullName}`,
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (section === "days") {
+    const workDays = sanitizeWorkDays(body.workDays);
+    if (!workDays) {
+      return NextResponse.json(
+        { error: "اختر يوم عمل واحداً على الأقل" },
+        { status: 400 },
+      );
+    }
+
+    await prisma.secretaryProfile.update({
+      where: { userId },
+      data: { workDays },
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      roleCode: user.role.code,
+      action: "SECRETARY_WORKDAYS_UPDATED",
+      entityType: "SecretaryProfile",
+      entityId: target.secretary.id,
+      oldValue: { workDays: target.secretary.workDays },
+      newValue: { workDays },
+      reason: `تحديد أيام فتح حساب السكرتير بواسطة ${user.fullName}`,
     });
     return NextResponse.json({ ok: true });
   }

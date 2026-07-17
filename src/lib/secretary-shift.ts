@@ -54,3 +54,47 @@ export const SHIFT_PRESETS = {
     loginUntil: "22:00",
   },
 } as const;
+
+/** أيام الأسبوع — رموز التخزين + التسمية العربية */
+export const WEEK_DAYS = [
+  { code: "SUN", label: "الأحد" },
+  { code: "MON", label: "الإثنين" },
+  { code: "TUE", label: "الثلاثاء" },
+  { code: "WED", label: "الأربعاء" },
+  { code: "THU", label: "الخميس" },
+  { code: "FRI", label: "الجمعة" },
+  { code: "SAT", label: "السبت" },
+] as const;
+
+export type WeekDayCode = (typeof WEEK_DAYS)[number]["code"];
+
+const VALID_DAY_CODES = new Set<string>(WEEK_DAYS.map((d) => d.code));
+
+/** تحويل نص workDays المخزّن إلى قائمة رموز صالحة */
+export function parseWorkDays(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((d) => d.trim().toUpperCase())
+    .filter((d) => VALID_DAY_CODES.has(d));
+}
+
+/** تنظيف workDays قادمة من العميل — يعيد null إن لم يبقَ يوم صالح */
+export function sanitizeWorkDays(raw: unknown): string | null {
+  const days = parseWorkDays(String(raw ?? ""));
+  if (days.length === 0) return null;
+  // ترتيب ثابت حسب الأسبوع
+  const ordered = WEEK_DAYS.map((d) => d.code).filter((c) =>
+    days.includes(c),
+  );
+  return ordered.join(",");
+}
+
+export function workDaysLabel(raw: string | null | undefined): string {
+  const days = parseWorkDays(raw);
+  if (days.length === 0) return "—";
+  if (days.length === 7) return "كل الأيام";
+  return WEEK_DAYS.filter((d) => days.includes(d.code))
+    .map((d) => d.label)
+    .join("، ");
+}

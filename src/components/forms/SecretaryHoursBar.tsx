@@ -4,7 +4,12 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { FormField, Input } from "@/components/ui/Form";
-import { SHIFT_PRESETS } from "@/lib/secretary-shift";
+import {
+  SHIFT_PRESETS,
+  WEEK_DAYS,
+  parseWorkDays,
+  workDaysLabel,
+} from "@/lib/secretary-shift";
 import { toLatinDigits } from "@/lib/latin-digits";
 
 export function EditSecretaryLoginForm({
@@ -101,6 +106,7 @@ export function SecretaryHoursBar({
   shiftCode,
   workStartTime,
   workEndTime,
+  workDays,
   csrfToken,
   status,
   onDelete,
@@ -112,6 +118,7 @@ export function SecretaryHoursBar({
   shiftCode: string;
   workStartTime: string;
   workEndTime: string;
+  workDays?: string;
   csrfToken: string;
   status?: string;
   onDelete?: React.ReactNode;
@@ -123,6 +130,7 @@ export function SecretaryHoursBar({
   const [shift, setShift] = useState(shiftCode || "MORNING");
   const [start, setStart] = useState(workStartTime || "07:00");
   const [end, setEnd] = useState(workEndTime || "14:00");
+  const [days, setDays] = useState<string[]>(() => parseWorkDays(workDays));
   const [msg, setMsg] = useState("");
 
   async function saveHours(nextShift: string, nextStart: string, nextEnd: string) {
@@ -144,7 +152,6 @@ export function SecretaryHoursBar({
           shiftCode: nextShift,
           workStartTime: nextStart,
           workEndTime: nextEnd,
-          workDays: "SUN,MON,TUE,WED,THU,SAT",
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -159,6 +166,48 @@ export function SecretaryHoursBar({
     } finally {
       setLoading(false);
     }
+  }
+
+  async function saveDays(nextDays: string[]) {
+    if (nextDays.length === 0) {
+      setMsg("اختر يوم عمل واحداً على الأقل");
+      return;
+    }
+    setLoading(true);
+    setMsg("");
+    try {
+      const res = await fetch("/api/admin/secretaries", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken,
+        },
+        body: JSON.stringify({
+          section: "days",
+          userId,
+          workDays: nextDays.join(","),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMsg(data.error || "فشل حفظ الأيام");
+        return;
+      }
+      setDays(nextDays);
+      setMsg("تم حفظ أيام فتح الحساب");
+      router.refresh();
+    } catch {
+      setMsg("تعذر الاتصال");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function toggleDay(code: string) {
+    setMsg("");
+    setDays((cur) =>
+      cur.includes(code) ? cur.filter((d) => d !== code) : [...cur, code],
+    );
   }
 
   const shiftLabel =
@@ -192,6 +241,9 @@ export function SecretaryHoursBar({
         </button>
         <span className="font-latin rounded-full bg-soft-teal px-2.5 py-1 text-xs text-teal">
           {shiftLabel} {toLatinDigits(workStartTime)}-{toLatinDigits(workEndTime)}
+        </span>
+        <span className="rounded-full bg-[#F1F5F9] px-2.5 py-1 text-xs font-semibold text-navy">
+          {workDaysLabel(days.join(","))}
         </span>
         <Button size="sm" variant="teal" onClick={() => setHoursOpen((v) => !v)}>
           أوقات العمل
@@ -272,6 +324,50 @@ export function SecretaryHoursBar({
             >
               حفظ المخصص
             </Button>
+          </div>
+
+          <div className="space-y-2 border-t border-border pt-3">
+            <p className="text-sm font-semibold text-navy">
+              أيام فتح الحساب
+            </p>
+            <p className="text-xs text-muted">
+              الدخول مسموح في الأيام المحددة فقط — مثال: الأحد والإثنين فقط،
+              أو الأسبوع كامل.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {WEEK_DAYS.map((d) => (
+                <button
+                  key={d.code}
+                  type="button"
+                  className={
+                    days.includes(d.code)
+                      ? "rounded-full bg-teal px-3 py-1.5 text-xs font-bold text-white"
+                      : "rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold text-muted hover:border-teal hover:text-teal"
+                  }
+                  onClick={() => toggleDay(d.code)}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="teal"
+                loading={loading}
+                onClick={() => saveDays(days)}
+              >
+                حفظ الأيام
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                loading={loading}
+                onClick={() => saveDays(WEEK_DAYS.map((d) => d.code))}
+              >
+                الأسبوع كامل
+              </Button>
+            </div>
           </div>
           {msg && <p className="font-latin text-xs text-teal">{msg}</p>}
         </div>

@@ -43,6 +43,7 @@ export default async function SpecialistSecretariesPage() {
                   shiftCode={sec.shiftCode}
                   workStartTime={sec.workStartTime}
                   workEndTime={sec.workEndTime}
+                  workDays={sec.workDays}
                   csrfToken={user.csrfToken}
                   status={sec.user.status}
                   onDelete={
