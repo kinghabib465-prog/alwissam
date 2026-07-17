@@ -25,6 +25,7 @@ import {
 import {
   loadSecretaryDirectedWindows,
   loadSecretaryOpenPayments,
+  loadSecretaryRejectedToday,
 } from "@/lib/secretary-reception-data";
 
 export const dynamic = "force-dynamic";
@@ -66,7 +67,7 @@ export default async function SecretaryDashboardPage({
   const sp = (await searchParams) || {};
   const tabRaw = sp.tab || (sp.invoice ? "pay" : undefined);
   const initialTab = (
-    ["today", "intake", "waiting", "pay"].includes(String(tabRaw))
+    ["today", "intake", "waiting", "pay", "rejected"].includes(String(tabRaw))
       ? tabRaw
       : undefined
   ) as ReceptionTab | undefined;
@@ -74,7 +75,7 @@ export default async function SecretaryDashboardPage({
   const { start, end } = algiersDayBounds();
   const today = algiersWeekday();
 
-  const [waiting, todayPending, doctors, directed, payments] =
+  const [waiting, todayPending, doctors, directed, payments, rejected] =
     await Promise.all([
       prisma.appointmentRequest.findMany({
         where: {
@@ -90,6 +91,7 @@ export default async function SecretaryDashboardPage({
       loadSecretaryDoctorsForDay(today),
       loadSecretaryDirectedWindows(),
       loadSecretaryOpenPayments(),
+      loadSecretaryRejectedToday(),
     ]);
 
   const preferIds = [
@@ -132,6 +134,7 @@ export default async function SecretaryDashboardPage({
           windows={directed.windows}
           openInvoices={payments.openInvoices}
           recentPayments={payments.recentPayments}
+          rejectedEntries={rejected}
           doctors={doctorOpts}
           csrfToken={user.csrfToken}
           initialTab={initialTab}

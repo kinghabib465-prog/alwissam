@@ -64,6 +64,7 @@ enum WaitingRoomStatus {
   SESSION_DONE
   NEEDS_FOLLOWUP
   LEFT
+  REJECTED_BY_DOCTOR
 }
 
 enum ToothState {
@@ -560,6 +561,9 @@ model WaitingRoomEntry {
   completedAt     DateTime?
   urgency         Boolean           @default(false)
   note            String?
+  doctorPrivateReason String?
+  doctorPublicReason  String?
+  rejectedAt      DateTime?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 

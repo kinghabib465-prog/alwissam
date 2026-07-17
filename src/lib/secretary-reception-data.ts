@@ -29,7 +29,7 @@ export async function loadSecretaryDirectedWindows(): Promise<{
   const [entries, doctors] = await Promise.all([
     prisma.waitingRoomEntry.findMany({
       where: {
-        status: { not: "LEFT" },
+        status: { notIn: ["LEFT", "REJECTED_BY_DOCTOR"] },
         arrivedAt: { gte: start, lt: end },
       },
       include: {
@@ -54,7 +54,7 @@ export async function loadSecretaryDirectedWindows(): Promise<{
           {
             waitingRoomEntries: {
               some: {
-                status: { not: "LEFT" },
+                status: { notIn: ["LEFT", "REJECTED_BY_DOCTOR"] },
                 arrivedAt: { gte: start, lt: end },
               },
             },
@@ -197,4 +197,32 @@ export async function loadSecretaryOpenPayments() {
       paymentDate: p.paymentDate.toISOString(),
     })),
   };
+}
+
+/** مرفوضون/مصروفون من الطبيب — سبب سري + سبب لطيف للمريض */
+export async function loadSecretaryRejectedToday() {
+  const { start, end } = algiersDayBounds();
+
+  const entries = await prisma.waitingRoomEntry.findMany({
+    where: {
+      status: "REJECTED_BY_DOCTOR",
+      rejectedAt: { gte: start, lt: end },
+    },
+    include: {
+      patient: true,
+      doctor: { include: { user: true } },
+    },
+    orderBy: { rejectedAt: "desc" },
+    take: 50,
+  });
+
+  return entries.map((e) => ({
+    id: e.id,
+    fullName: e.patient.fullName?.trim() || "—",
+    phone: e.patient.phone,
+    doctorName: e.doctor.user.fullName,
+    privateReason: e.doctorPrivateReason?.trim() || "—",
+    publicReason: e.doctorPublicReason?.trim() || "",
+    rejectedAtIso: (e.rejectedAt || e.updatedAt).toISOString(),
+  }));
 }

@@ -15,10 +15,10 @@ export const STAFF_DOCTOR_APPOINTMENT_TYPES = [
   { value: "OTHER", label: "أخرى" },
 ] as const;
 
-const OWNER_VALUES = new Set(
+const OWNER_VALUES = new Set<string>(
   OWNER_APPOINTMENT_TYPES.map((t) => t.value),
 );
-const STAFF_VALUES = new Set(
+const STAFF_VALUES = new Set<string>(
   STAFF_DOCTOR_APPOINTMENT_TYPES.map((t) => t.value),
 );
 

@@ -12,12 +12,16 @@ import {
   type DoctorWindow,
 } from "@/components/secretary/DirectedDoctorPicker";
 import { CollectDoctorChargeForm } from "@/components/secretary/CollectDoctorChargeForm";
+import {
+  SecretaryRejectedBar,
+  type RejectedEntry,
+} from "@/components/secretary/SecretaryRejectedBar";
 import { toLatinDigits } from "@/lib/latin-digits";
 import { formatClinicDate } from "@/lib/clinic-date";
 import { formatCurrencyDZD } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
-export type ReceptionTab = "today" | "intake" | "waiting" | "pay";
+export type ReceptionTab = "today" | "intake" | "waiting" | "pay" | "rejected";
 
 type DoctorOpt = { id: string; name: string; type: string };
 
@@ -108,6 +112,11 @@ const TABS: {
     label: "الدفع",
     hint: "بعد المعاينة",
   },
+  {
+    id: "rejected",
+    label: "المرفوضون",
+    hint: "رفض/صرف من الطبيب",
+  },
 ];
 
 /**
@@ -122,6 +131,7 @@ export function SecretaryReceptionHub({
   windows,
   openInvoices,
   recentPayments,
+  rejectedEntries,
   doctors,
   csrfToken,
   initialTab,
@@ -134,6 +144,7 @@ export function SecretaryReceptionHub({
   windows: DoctorWindow[];
   openInvoices: OpenInvoice[];
   recentPayments: RecentPayment[];
+  rejectedEntries: RejectedEntry[];
   doctors: DoctorOpt[];
   csrfToken: string;
   initialTab?: ReceptionTab;
@@ -151,6 +162,7 @@ export function SecretaryReceptionHub({
     intake: intakeRequests.length,
     waiting: waitingCount,
     pay: payCount,
+    rejected: rejectedEntries.length,
   };
 
   const smartDefault = useMemo((): ReceptionTab => {
@@ -308,6 +320,33 @@ export function SecretaryReceptionHub({
           recentPayments={recentPayments}
           csrfToken={csrfToken}
         />
+      ) : null}
+
+      {tab === "rejected" ? (
+        <section>
+          <Card>
+            <h2 className="mb-1 font-bold text-navy">المرفوضون / المصروفون</h2>
+            <p className="mb-3 text-xs text-muted">
+              رفض أو صرف من الطبيب — السبب السري للسكرتيرة ونص لطيف للمريض.
+            </p>
+            {rejectedEntries.length === 0 ? (
+              <EmptyState
+                title="لا مرفوضين اليوم"
+                description="عند رفض الطبيب لمريض يظهر هنا مع السبب."
+              />
+            ) : (
+              <div className="space-y-2">
+                {rejectedEntries.map((entry) => (
+                  <SecretaryRejectedBar
+                    key={entry.id}
+                    entry={entry}
+                    csrfToken={csrfToken}
+                  />
+                ))}
+              </div>
+            )}
+          </Card>
+        </section>
       ) : null}
     </div>
   );

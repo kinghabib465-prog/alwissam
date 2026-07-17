@@ -173,5 +173,83 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  if (action === "reject") {
+    const privateReason = String(body.privateReason || "").trim();
+    const publicReason = String(body.publicReason || "").trim();
+
+    if (!privateReason || privateReason.length < 3) {
+      return NextResponse.json(
+        { error: "اكتب سبب الرفض للسكرتيرة (3 أحرف على الأقل)" },
+        { status: 400 },
+      );
+    }
+
+    const allowedReject = ["WAITING", "WITH_DOCTOR", "ARRIVED"];
+    if (!allowedReject.includes(entry.status)) {
+      return NextResponse.json(
+        { error: "لا يمكن رفض هذا المريض في حالته الحالية" },
+        { status: 400 },
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.waitingRoomEntry.update({
+        where: { id: entryId },
+        data: {
+          status: "REJECTED_BY_DOCTOR",
+          rejectedAt: new Date(),
+          completedAt: new Date(),
+          doctorPrivateReason: privateReason,
+          doctorPublicReason: publicReason || null,
+          note: `رفض/صرف بواسطة ${user.fullName}`,
+        },
+      });
+
+      await tx.appointment.update({
+        where: { id: entry.appointmentId },
+        data: {
+          status: "CANCELLED_BY_CLINIC",
+          notes: [
+            entry.appointment.notes,
+            publicReason
+              ? `صرف بلباقة: ${publicReason}`
+              : "تم إنهاء الزيارة — راجع السكرتارية",
+          ]
+            .filter(Boolean)
+            .join(" — "),
+          statusHistory: {
+            create: {
+              previousStatus: entry.appointment.status,
+              newStatus: "CANCELLED_BY_CLINIC",
+              changedById: user.id,
+              reason: `رفض/صرف بواسطة ${user.fullName}`,
+              note: privateReason,
+            },
+          },
+        },
+      });
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      roleCode: user.role.code,
+      action: "PATIENT_REJECTED_BY_DOCTOR",
+      entityType: "WaitingRoomEntry",
+      entityId: entryId,
+      newValue: { privateReason, publicReason },
+      reason: `رفض/صرف ${entry.patient.fullName} بواسطة ${user.fullName}`,
+    });
+
+    await publishEvent("clinic:waiting-room", {
+      id: entryId,
+      status: "REJECTED_BY_DOCTOR",
+    });
+
+    return NextResponse.json({
+      ok: true,
+      message: "تم إرسال الرفض للسكرتيرة — لن يرى المريض السبب الحقيقي",
+    });
+  }
+
   return NextResponse.json({ error: "إجراء غير معروف" }, { status: 400 });
 }

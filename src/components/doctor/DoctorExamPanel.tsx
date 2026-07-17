@@ -42,13 +42,19 @@ export function DoctorExamPanel({
   const { firstName, lastName } = splitPatientName(fullName);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(status === "WITH_DOCTOR");
+  const [rejectOpen, setRejectOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
+  const [privateReason, setPrivateReason] = useState("");
+  const [publicReason, setPublicReason] = useState("");
   const [covered, setCovered] = useState(false);
   const [error, setError] = useState("");
 
-  const done = status === "SESSION_DONE" || status === "LEFT";
+  const done =
+    status === "SESSION_DONE" ||
+    status === "LEFT" ||
+    status === "REJECTED_BY_DOCTOR";
   const info = patientInfo || {};
   const displayPhone = info.phone || phone;
 
@@ -99,6 +105,33 @@ export function DoctorExamPanel({
       setError(data.error || "تعذر إنهاء المعاينة");
       return;
     }
+    setModalOpen(false);
+    router.refresh();
+  }
+
+  async function rejectPatient() {
+    setLoading(true);
+    setError("");
+    const res = await fetch("/api/doctor/exam", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-csrf-token": csrfToken,
+      },
+      body: JSON.stringify({
+        entryId,
+        action: "reject",
+        privateReason,
+        publicReason,
+      }),
+    });
+    const data = await res.json();
+    setLoading(false);
+    if (!res.ok) {
+      setError(data.error || "تعذر إرسال الرفض");
+      return;
+    }
+    setRejectOpen(false);
     setModalOpen(false);
     router.refresh();
   }
@@ -163,9 +196,22 @@ export function DoctorExamPanel({
                   : "عرض معلومات التسجيل"}
             </p>
           </button>
-          <Button size="sm" variant="teal" loading={loading} onClick={openExam}>
-            معاينة
-          </Button>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button size="sm" variant="teal" loading={loading} onClick={openExam}>
+              معاينة
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-danger/40 text-danger hover:bg-danger/5"
+              onClick={() => {
+                setError("");
+                setRejectOpen(true);
+              }}
+            >
+              صرف / رفض
+            </Button>
+          </div>
         </div>
 
         {infoOpen && (
@@ -284,6 +330,65 @@ export function DoctorExamPanel({
                 إرسال للسكرتير
               </Button>
               <Button variant="outline" onClick={() => setModalOpen(false)}>
+                إلغاء
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {rejectOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <div className="mb-3 flex items-start justify-between gap-2">
+              <p className="font-bold text-navy">
+                صرف / رفض — {firstName} {lastName}
+              </p>
+              <button
+                type="button"
+                className="text-muted hover:text-navy"
+                onClick={() => setRejectOpen(false)}
+              >
+                إغلاق
+              </button>
+            </div>
+
+            <p className="mb-3 text-xs text-muted">
+              السبب الحقيقي يصل للسكرتيرة فقط. استخدمي «ما يُقال للمريض» لصرف
+              بلباقة دون أن يشعر بالطرد.
+            </p>
+
+            <FormField label="سبب للسكرتيرة (سري) *">
+              <Textarea
+                rows={2}
+                value={privateReason}
+                onChange={(e) => setPrivateReason(e.target.value)}
+                placeholder="السبب الحقيقي — لا يراه المريض"
+              />
+            </FormField>
+
+            <div className="mt-3">
+              <FormField label="ما يُقال للمريض (لباقة)">
+                <Textarea
+                  rows={2}
+                  value={publicReason}
+                  onChange={(e) => setPublicReason(e.target.value)}
+                  placeholder="مثال: ننصحكم بإعادة الجدولة لاحقاً — شكراً لتفهمكم"
+                />
+              </FormField>
+            </div>
+
+            {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+
+            <div className="mt-4 flex gap-2">
+              <Button
+                className="flex-1 border-danger/40 text-danger hover:bg-danger/5"
+                variant="outline"
+                loading={loading}
+                onClick={rejectPatient}
+              >
+                إرسال للسكرتيرة
+              </Button>
+              <Button variant="outline" onClick={() => setRejectOpen(false)}>
                 إلغاء
               </Button>
             </div>

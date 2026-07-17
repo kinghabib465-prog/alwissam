@@ -46,6 +46,41 @@ export async function POST(
     }
   }
 
+  if (body.action === "dismiss_rejected") {
+    if (!["SECRETARY", "ADMIN"].includes(user.role.code)) {
+      return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
+    }
+    const entry = await prisma.waitingRoomEntry.findUnique({ where: { id } });
+    if (!entry) {
+      return NextResponse.json({ error: "غير موجود" }, { status: 404 });
+    }
+    if (entry.status !== "REJECTED_BY_DOCTOR") {
+      return NextResponse.json(
+        { error: "هذا السجل ليس في قائمة المرفوضين" },
+        { status: 400 },
+      );
+    }
+    await prisma.waitingRoomEntry.update({
+      where: { id },
+      data: {
+        status: "LEFT",
+        note: entry.note
+          ? `${entry.note} — تم التعامل بواسطة ${user.fullName}`
+          : `تم التعامل مع الرفض بواسطة ${user.fullName}`,
+      },
+    });
+    await createAuditLog({
+      userId: user.id,
+      roleCode: user.role.code,
+      action: "REJECTED_PATIENT_DISMISSED",
+      entityType: "WaitingRoomEntry",
+      entityId: id,
+      reason: `إغلاق ملف مرفوض بواسطة ${user.fullName}`,
+    });
+    await publishEvent("clinic:waiting-room", { id, status: "LEFT" });
+    return NextResponse.json({ ok: true, message: "تم التعامل" });
+  }
+
   if (body.action === "close_visit") {
     if (!["SECRETARY", "ADMIN"].includes(user.role.code)) {
       return NextResponse.json({ error: "غير مصرح" }, { status: 401 });

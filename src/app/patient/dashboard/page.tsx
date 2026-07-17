@@ -4,7 +4,7 @@ import { ClinicLogo } from "@/components/branding/ClinicLogo";
 import { AppointmentCountdown } from "@/components/dashboard/AppointmentCountdown";
 import { PatientContactBanner } from "@/components/patient/PatientContactBanner";
 import { formatClinicAppointmentPeriod } from "@/lib/clinic-date";
-import { periodFromStartAt } from "@/lib/doctor-availability";
+import { periodFromStartAt, SHIFT_LABEL_AR } from "@/lib/doctor-availability";
 import { loadClinicContact } from "@/lib/clinic-contact";
 import { toLatinDigits } from "@/lib/latin-digits";
 
@@ -56,6 +56,8 @@ export default async function PatientDashboardPage() {
         periodFromStartAt(targetDate),
       )
     : null;
+  const period = targetDate ? periodFromStartAt(targetDate) : null;
+  const periodLabel = period ? SHIFT_LABEL_AR[period] : null;
 
   return (
     <div className="min-h-screen bg-[#F4F8FA]">
@@ -91,12 +93,25 @@ export default async function PatientDashboardPage() {
         <section className="rounded-2xl border border-border bg-white px-5 py-6 text-center shadow-sm">
           <p className="text-sm text-muted">الموعد القادم — اليوم والفترة</p>
           {dayLabel ? (
-            <p
-              className="mt-3 text-xl font-bold leading-relaxed text-navy"
-              data-numeric="true"
-            >
-              {dayLabel}
-            </p>
+            <>
+              <p
+                className="mt-3 text-xl font-bold leading-relaxed text-navy"
+                data-numeric="true"
+              >
+                {dayLabel}
+              </p>
+              {periodLabel ? (
+                <p className="mt-3">
+                  <span className="inline-block rounded-full bg-teal/10 px-5 py-2 text-lg font-bold text-teal">
+                    {periodLabel === "صباح"
+                      ? "موعد صباح"
+                      : periodLabel === "مساء"
+                        ? "موعد مساء"
+                        : `موعد ${periodLabel}`}
+                  </span>
+                </p>
+              ) : null}
+            </>
           ) : (
             <p className="mt-3 text-base font-semibold text-muted">
               لا يوجد موعد محدد بعد
