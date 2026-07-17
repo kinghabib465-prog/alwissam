@@ -50,6 +50,11 @@ export async function POST(req: NextRequest) {
 
   const coverageLabel = coverageAr[coverage];
   let activationHint = "";
+  let pendingActivation: {
+    email: string;
+    fullName: string;
+    token: string;
+  } | null = null;
 
   await prisma.$transaction(async (tx) => {
     if (coverage === "SESSION_FEE") {
@@ -160,6 +165,15 @@ export async function POST(req: NextRequest) {
           },
         });
 
+        const patientEmail = appointment.patient.email?.trim();
+        if (patientEmail) {
+          pendingActivation = {
+            email: patientEmail,
+            fullName: appointment.patient.fullName,
+            token,
+          };
+        }
+
         await tx.orthodonticCase.create({
           data: {
             patientId,
@@ -197,6 +211,20 @@ export async function POST(req: NextRequest) {
     newValue: { coverage, amount: body.amount ?? null, requestOrthoAccount },
     reason: `بعد الزيارة بواسطة ${user.fullName} — ${coverageLabel}`,
   });
+
+  if (pendingActivation) {
+    try {
+      const { sendAccountActivationEmail } = await import(
+        "@/lib/notifications/email"
+      );
+      await sendAccountActivationEmail(pendingActivation);
+      activationHint += " · أُرسل رابط التفعيل إلى بريد المريض";
+    } catch (err) {
+      console.error("[checkout] activation email failed:", err);
+      activationHint +=
+        " · تعذر إرسال بريد التفعيل (راجعي إعدادات SMTP/Resend)";
+    }
+  }
 
   return NextResponse.json({
     ok: true,

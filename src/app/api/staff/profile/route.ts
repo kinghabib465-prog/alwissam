@@ -1,17 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash, randomBytes } from "crypto";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { prisma } from "@/lib/db/prisma";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { createAuditLog } from "@/lib/audit/log";
+import {
+  isEmailConfigured,
+  sendEmailChangeVerification,
+} from "@/lib/notifications/email";
 
-/** تعديل بيانات دخول الطبيب (بريد/هاتف/كلمة سر) */
+/**
+ * تعديل بيانات دخول الطاقم (هاتف/كلمة سر فوراً · البريد عبر تأكيد بالرسالة)
+ */
 export async function PATCH(req: NextRequest) {
   const user = await getCurrentUser();
   if (
     !user ||
-    !["SECRETARY", "ADMIN"].includes(user.role.code)
+    !["SECRETARY", "ADMIN", "DOCTOR_GENERAL", "DOCTOR_SPECIALIST"].includes(
+      user.role.code,
+    )
   ) {
-    return NextResponse.json({ error: "غير مصرح — تحكم الدخول للمدير فقط" }, { status: 401 });
+    return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
   }
   if (req.headers.get("x-csrf-token") !== user.csrfToken) {
     return NextResponse.json({ error: "رمز الحماية غير صالح" }, { status: 403 });
@@ -43,18 +52,13 @@ export async function PATCH(req: NextRequest) {
     }
     const ok = await verifyPassword(currentPassword, dbUser.passwordHash);
     if (!ok) {
-      return NextResponse.json({ error: "كلمة السر الحالية غير صحيحة" }, { status: 400 });
+      return NextResponse.json(
+        { error: "كلمة السر الحالية غير صحيحة" },
+        { status: 400 },
+      );
     }
   }
 
-  if (email) {
-    const taken = await prisma.user.findFirst({
-      where: { email, NOT: { id: user.id } },
-    });
-    if (taken) {
-      return NextResponse.json({ error: "البريد مستخدم مسبقًا" }, { status: 409 });
-    }
-  }
   if (phone) {
     const taken = await prisma.user.findFirst({
       where: { phone, NOT: { id: user.id } },
@@ -64,19 +68,79 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
+  let emailPendingMessage: string | null = null;
+  const normalizedNewEmail = email?.toLowerCase();
+  const emailChanged =
+    email !== undefined &&
+    !!normalizedNewEmail &&
+    normalizedNewEmail.includes("@") &&
+    normalizedNewEmail !== (dbUser.email || "").toLowerCase();
+
+  if (emailChanged && normalizedNewEmail) {
+    const taken = await prisma.user.findFirst({
+      where: {
+        email: { equals: normalizedNewEmail, mode: "insensitive" },
+        NOT: { id: user.id },
+        deletedAt: null,
+      },
+    });
+    if (taken) {
+      return NextResponse.json({ error: "البريد مستخدم مسبقًا" }, { status: 409 });
+    }
+
+    if (!isEmailConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            "لا يمكن تأكيد البريد: إعدادات الإرسال غير موجودة (SMTP أو RESEND_API_KEY).",
+        },
+        { status: 503 },
+      );
+    }
+
+    await prisma.emailChangeToken.updateMany({
+      where: { userId: user.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+
+    const token = randomBytes(32).toString("hex");
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    await prisma.emailChangeToken.create({
+      data: {
+        userId: user.id,
+        newEmail: normalizedNewEmail,
+        tokenHash,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    });
+
+    try {
+      await sendEmailChangeVerification({
+        to: normalizedNewEmail,
+        fullName: user.fullName,
+        token,
+      });
+      emailPendingMessage = `أُرسلت رسالة تأكيد إلى ${normalizedNewEmail}. البريد الحالي يبقى سارياً حتى التأكيد.`;
+    } catch (err) {
+      console.error("[staff/profile] email change failed:", err);
+      return NextResponse.json(
+        { error: "تعذر إرسال رسالة تأكيد البريد" },
+        { status: 502 },
+      );
+    }
+  }
+
   const data: {
-    email?: string;
     phone?: string;
     passwordHash?: string;
   } = {};
-  if (email !== undefined) data.email = email || undefined;
   if (phone !== undefined) data.phone = phone || undefined;
   if (newPassword) data.passwordHash = await hashPassword(newPassword);
 
-  const updated = await prisma.user.update({
-    where: { id: user.id },
-    data,
-  });
+  const updated =
+    Object.keys(data).length > 0
+      ? await prisma.user.update({ where: { id: user.id }, data })
+      : dbUser;
 
   await createAuditLog({
     userId: user.id,
@@ -88,12 +152,15 @@ export async function PATCH(req: NextRequest) {
       email: updated.email,
       phone: updated.phone,
       passwordChanged: !!newPassword,
+      emailChangePending: emailPendingMessage ? normalizedNewEmail : null,
     },
     reason: `تحديث بيانات الدخول بواسطة ${user.fullName}`,
   });
 
   return NextResponse.json({
     ok: true,
+    message: emailPendingMessage || "تم حفظ التعديلات",
     user: { email: updated.email, phone: updated.phone },
+    emailChangePending: !!emailPendingMessage,
   });
 }

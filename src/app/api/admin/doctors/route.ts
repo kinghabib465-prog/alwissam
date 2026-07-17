@@ -156,6 +156,27 @@ export async function PATCH(req: NextRequest) {
     data,
   });
 
+  if (
+    email &&
+    updated.email &&
+    updated.email.toLowerCase() !== (target.email || "").toLowerCase()
+  ) {
+    try {
+      const { sendEmailChangedNotice } = await import(
+        "@/lib/notifications/email"
+      );
+      const { getAppOrigin } = await import("@/lib/patient-qr");
+      await sendEmailChangedNotice({
+        to: updated.email,
+        fullName: target.fullName,
+        newEmail: updated.email,
+        loginUrl: `${getAppOrigin()}/staff/login`,
+      });
+    } catch (err) {
+      console.error("[doctors] email notice failed:", err);
+    }
+  }
+
   await createAuditLog({
     userId: user.id,
     roleCode: user.role.code,

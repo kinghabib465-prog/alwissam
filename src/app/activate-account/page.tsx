@@ -1,15 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { PasswordInput } from "@/components/auth/PasswordInput";
 import { Button } from "@/components/ui/Button";
 import { FormField, Input } from "@/components/ui/Form";
 
-export default function ActivateAccountPage() {
+function ActivateAccountForm() {
   const router = useRouter();
-  const [token, setToken] = useState("");
+  const searchParams = useSearchParams();
+  const [token, setToken] = useState(searchParams.get("token") || "");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
@@ -46,7 +47,7 @@ export default function ActivateAccountPage() {
     <AuthPageShell
       eyebrow="بوابة المرضى"
       title="تفعيل حساب المريض"
-      description="أدخل رمز التفعيل الذي استلمته من العيادة، ثم أنشئ كلمة مرور آمنة."
+      description="إن وصلك رابط بالبريد، الرمز يُملأ تلقائياً. وإلا أدخله يدوياً ثم أنشئ كلمة مرور."
       alternateHref="/patient/login"
       alternateLabel="لديك حساب؟ تسجيل الدخول"
     >
@@ -91,5 +92,13 @@ export default function ActivateAccountPage() {
         </Button>
       </form>
     </AuthPageShell>
+  );
+}
+
+export default function ActivateAccountPage() {
+  return (
+    <Suspense fallback={null}>
+      <ActivateAccountForm />
+    </Suspense>
   );
 }

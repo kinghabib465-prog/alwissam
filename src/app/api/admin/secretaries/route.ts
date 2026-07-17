@@ -138,6 +138,30 @@ export async function PATCH(req: NextRequest) {
     if (newPassword) data.passwordHash = await hashPassword(newPassword);
 
     await prisma.user.update({ where: { id: userId }, data });
+
+    const nextEmail = (email ?? target.email)?.trim();
+    if (
+      email &&
+      nextEmail &&
+      nextEmail.includes("@") &&
+      nextEmail.toLowerCase() !== (target.email || "").toLowerCase()
+    ) {
+      try {
+        const { sendEmailChangedNotice } = await import(
+          "@/lib/notifications/email"
+        );
+        const { getAppOrigin } = await import("@/lib/patient-qr");
+        await sendEmailChangedNotice({
+          to: nextEmail,
+          fullName: target.fullName,
+          newEmail: nextEmail,
+          loginUrl: `${getAppOrigin()}/staff/login`,
+        });
+      } catch (err) {
+        console.error("[secretaries] email notice failed:", err);
+      }
+    }
+
     await createAuditLog({
       userId: user.id,
       roleCode: user.role.code,

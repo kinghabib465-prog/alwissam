@@ -27,7 +27,7 @@ function ForgotPasswordForm() {
       const res = await fetch("/api/auth/password-reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier }),
+        body: JSON.stringify({ identifier, portal }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -49,7 +49,7 @@ function ForgotPasswordForm() {
     <AuthPageShell
       eyebrow="أمان الحساب"
       title="استعادة كلمة المرور"
-      description="أدخل البريد أو رقم الهاتف المرتبط بالحساب. لن نكشف إن كان الحساب مسجلاً أم لا."
+      description="أدخل البريد المرتبط بالحساب. ستصلك رسالة برابط الاستعادة (تحقق أيضاً من مجلد المزعج)."
       alternateHref={loginHref}
       alternateLabel="العودة إلى تسجيل الدخول"
     >
