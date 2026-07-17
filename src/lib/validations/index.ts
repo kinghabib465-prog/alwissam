@@ -3,9 +3,12 @@ import { z } from "zod";
 export const loginSchema = z.object({
   identifier: z
     .string()
-    .min(3, "يرجى إدخال البريد الإلكتروني أو رقم الهاتف"),
-  password: z.string().min(6, "كلمة المرور قصيرة جدًا"),
+    .trim()
+    .min(3, "يرجى إدخال البريد الإلكتروني أو رقم الهاتف")
+    .max(254, "بيانات الدخول طويلة جدًا"),
+  password: z.string().min(8, "كلمة المرور قصيرة جدًا"),
   rememberMe: z.boolean().optional().default(false),
+  portal: z.enum(["staff", "patient"]).default("staff"),
 });
 
 export const bookAppointmentSchema = z.object({

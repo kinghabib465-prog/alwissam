@@ -1,17 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ClinicLogo } from "@/components/branding/ClinicLogo";
+import { AuthPageShell } from "@/components/auth/AuthPageShell";
+import { PasswordInput } from "@/components/auth/PasswordInput";
 import { Button } from "@/components/ui/Button";
 import { FormField, Input } from "@/components/ui/Form";
+import { safeInternalPath } from "@/lib/auth/safe-next";
 
-export default function StaffLoginPage() {
+function StaffLoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -24,14 +26,23 @@ export default function StaffLoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier, password, rememberMe, portal: "staff" }),
+        body: JSON.stringify({
+          identifier,
+          password,
+          rememberMe,
+          portal: "staff",
+        }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error || "فشل تسجيل الدخول");
         return;
       }
-      router.push(data.redirectTo);
+      const destination = safeInternalPath(
+        searchParams.get("next"),
+        data.redirectTo || "/staff/login",
+      );
+      router.push(destination);
       router.refresh();
     } catch {
       setError("تعذر الاتصال بالخادم");
@@ -41,76 +52,69 @@ export default function StaffLoginPage() {
   }
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
-      <div className="login-hero relative hidden items-center justify-center p-10 text-white lg:flex">
-        <div className="max-w-md">
-          <ClinicLogo light href="/" />
-          <h1 className="mt-8 text-3xl font-bold">بوابة الطاقم الطبي</h1>
-          <p className="mt-3 text-white/80">
-            دخول السكرتارية والأطباء وصاحبة العيادة.
-          </p>
-        </div>
-      </div>
-      <div className="flex items-center justify-center bg-background px-4 py-10">
-        <form
-          onSubmit={onSubmit}
-          className="card-surface w-full max-w-md space-y-4 p-6 sm:p-8"
-        >
-          <div className="lg:hidden">
-            <ClinicLogo />
-          </div>
-          <h2 className="text-2xl font-bold text-navy">تسجيل دخول الطاقم</h2>
-          <FormField label="البريد أو الهاتف" htmlFor="identifier">
-            <Input
-              id="identifier"
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-              autoComplete="username"
-              required
+    <AuthPageShell
+      eyebrow="بوابة الطاقم"
+      title="تسجيل دخول الطاقم"
+      description="للأطباء والسكرتارية وصاحبة العيادة. استخدم البريد أو رقم الهاتف المسجّل."
+      alternateHref="/patient/login"
+      alternateLabel="الانتقال إلى دخول المريض"
+    >
+      <form onSubmit={onSubmit} className="space-y-4">
+        <FormField label="البريد أو الهاتف" htmlFor="identifier">
+          <Input
+            id="identifier"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+            autoComplete="username"
+            inputMode="email"
+            placeholder="البريد الإلكتروني أو رقم الهاتف"
+            required
+          />
+        </FormField>
+        <FormField label="كلمة المرور" htmlFor="password">
+          <PasswordInput
+            id="password"
+            value={password}
+            onChange={setPassword}
+          />
+        </FormField>
+        <div className="flex items-center justify-between text-sm">
+          <label className="flex cursor-pointer items-center gap-2 text-muted">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="h-4 w-4 accent-teal"
             />
-          </FormField>
-          <FormField label="كلمة المرور" htmlFor="password">
-            <div className="relative">
-              <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                required
-              />
-              <button
-                type="button"
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted"
-                onClick={() => setShowPassword((v) => !v)}
-              >
-                {showPassword ? "إخفاء" : "إظهار"}
-              </button>
-            </div>
-          </FormField>
-          <div className="flex items-center justify-between text-sm">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-              />
-              تذكرني
-            </label>
-            <Link href="/forgot-password" className="text-blue">
-              نسيت كلمة المرور؟
-            </Link>
-          </div>
-          {error && (
-            <p className="rounded-xl bg-[#FDECEE] px-3 py-2 text-sm text-danger" role="alert">
-              {error}
-            </p>
-          )}
-          <Button type="submit" className="w-full" loading={loading}>
-            دخول
-          </Button>
-        </form>
-      </div>
-    </div>
+            تذكرني
+          </label>
+          <Link
+            href="/forgot-password?portal=staff"
+            className="font-semibold text-blue hover:text-teal"
+          >
+            نسيت كلمة المرور؟
+          </Link>
+        </div>
+        {error && (
+          <p
+            className="rounded-xl bg-[#FDECEE] px-3 py-2 text-sm text-danger"
+            role="alert"
+          >
+            {error}
+          </p>
+        )}
+        <Button type="submit" className="w-full" loading={loading}>
+          تسجيل الدخول
+        </Button>
+      </form>
+    </AuthPageShell>
+  );
+}
+
+export default function StaffLoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <StaffLoginForm />
+    </Suspense>
   );
 }

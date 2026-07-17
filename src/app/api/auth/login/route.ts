@@ -16,14 +16,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { identifier, password, rememberMe } = parsed.data;
-  const ip = req.headers.get("x-forwarded-for") || "unknown";
+  const { identifier, password, rememberMe, portal } = parsed.data;
+  const normalizedIdentifier = identifier.includes("@")
+    ? identifier.toLowerCase()
+    : identifier;
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    "unknown";
   const userAgent = req.headers.get("user-agent");
 
   const rl = await rateLimit({
-    key: `login:${ip}:${identifier}`,
+    key: `login:${ip}:${normalizedIdentifier}`,
     limit: Number(process.env.MAX_LOGIN_ATTEMPTS || 5),
     windowMs: 15 * 60 * 1000,
+    increment: false,
   });
 
   if (!rl.allowed) {
@@ -33,26 +40,50 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const consumeLoginAttempt = async () => {
+    await rateLimit({
+      key: `login:${ip}:${normalizedIdentifier}`,
+      limit: Number(process.env.MAX_LOGIN_ATTEMPTS || 5),
+      windowMs: 15 * 60 * 1000,
+      increment: true,
+    });
+  };
+
   const user = await prisma.user.findFirst({
     where: {
       deletedAt: null,
-      OR: [{ email: identifier }, { phone: identifier }],
+      OR: [
+        {
+          email: {
+            equals: normalizedIdentifier,
+            mode: "insensitive",
+          },
+        },
+        { phone: normalizedIdentifier },
+      ],
     },
     include: { role: true },
   });
 
-  const fail = async (reason: string) => {
+  const fail = async (
+    reason: string,
+    options: { incrementAttempts?: boolean } = {},
+  ) => {
+    const incrementAttempts = options.incrementAttempts !== false;
+    if (incrementAttempts) {
+      await consumeLoginAttempt();
+    }
     await prisma.loginHistory.create({
       data: {
         userId: user?.id,
-        identifier,
+        identifier: normalizedIdentifier,
         success: false,
         ipAddress: ip,
         userAgent: userAgent || undefined,
         reason,
       },
     });
-    if (user) {
+    if (user && incrementAttempts) {
       const maxAttempts = Number(process.env.MAX_LOGIN_ATTEMPTS || 5);
       const lockMinutes = Number(process.env.LOCKOUT_MINUTES || 30);
       const failedLoginCount = user.failedLoginCount + 1;
@@ -90,7 +121,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (user.lockedUntil && user.lockedUntil > new Date()) {
-    await fail("الحساب مقفل مؤقتًا");
+    await fail("الحساب مقفل مؤقتًا", { incrementAttempts: false });
     return NextResponse.json(
       { error: "الحساب مقفل مؤقتًا بسبب محاولات فاشلة متكررة" },
       { status: 423 },
@@ -98,20 +129,19 @@ export async function POST(req: NextRequest) {
   }
 
   if (user.status !== "ACTIVE" && user.status !== "LOCKED") {
-    await fail("الحساب غير نشط");
+    await fail("الحساب غير نشط", { incrementAttempts: false });
     return NextResponse.json({ error: "الحساب غير نشط" }, { status: 403 });
   }
 
-  const portal = body?.portal === "patient" ? "patient" : "staff";
   if (portal === "patient" && user.role.code !== "PATIENT") {
-    await fail("بوابة المريض فقط");
+    await fail("بوابة المريض فقط", { incrementAttempts: false });
     return NextResponse.json(
       { error: "هذا الحساب غير مخصص لبوابة المرضى" },
       { status: 403 },
     );
   }
   if (portal === "staff" && user.role.code === "PATIENT") {
-    await fail("بوابة الطاقم فقط");
+    await fail("بوابة الطاقم فقط", { incrementAttempts: false });
     return NextResponse.json(
       { error: "يرجى استخدام بوابة المرضى" },
       { status: 403 },
@@ -132,16 +162,24 @@ export async function POST(req: NextRequest) {
     const secretary = await prisma.secretaryProfile.findUnique({
       where: { userId: user.id },
     });
-    if (secretary) {
-      const { isWithinSecretaryShift } = await import("@/lib/secretary-shift");
-      const gate = isWithinSecretaryShift(secretary);
-      if (!gate.ok) {
-        await fail(gate.message || "خارج أوقات العمل");
-        return NextResponse.json(
-          { error: gate.message || "حسابك مغلق خارج أوقات العمل" },
-          { status: 403 },
-        );
-      }
+    if (!secretary) {
+      await fail("ملف السكرتارية غير مكتمل", { incrementAttempts: false });
+      return NextResponse.json(
+        { error: "تعذر التحقق من جدول عمل الحساب. راجعي صاحبة العيادة." },
+        { status: 403 },
+      );
+    }
+
+    const { isWithinSecretaryShift } = await import("@/lib/secretary-shift");
+    const gate = isWithinSecretaryShift(secretary);
+    if (!gate.ok) {
+      await fail(gate.message || "خارج أوقات العمل", {
+        incrementAttempts: false,
+      });
+      return NextResponse.json(
+        { error: gate.message || "حسابك مغلق خارج أوقات العمل" },
+        { status: 403 },
+      );
     }
   }
 
@@ -165,7 +203,7 @@ export async function POST(req: NextRequest) {
   await prisma.loginHistory.create({
     data: {
       userId: user.id,
-      identifier,
+      identifier: normalizedIdentifier,
       success: true,
       ipAddress: ip,
       userAgent: userAgent || undefined,

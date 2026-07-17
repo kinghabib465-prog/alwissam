@@ -1,15 +1,31 @@
 import { redirect } from "next/navigation";
 import type { RoleCode } from "@prisma/client";
-import { getSessionFromCookie } from "@/lib/auth/session";
+import { destroySession, getSessionFromCookie } from "@/lib/auth/session";
 import { roleDashboardPath } from "@/lib/audit/log";
 import {
   type PermissionCode,
   roleHasPermission,
 } from "@/lib/auth/permissions";
+import { isWithinSecretaryShift } from "@/lib/secretary-shift";
 
 export async function getCurrentUser() {
   const session = await getSessionFromCookie();
   if (!session) return null;
+
+  // السكرتير يبقى داخل دوامه فقط — حتى بعد rememberMe
+  if (session.user.role.code === "SECRETARY") {
+    const profile = session.user.secretary;
+    if (!profile) {
+      await destroySession();
+      return null;
+    }
+    const gate = isWithinSecretaryShift(profile);
+    if (!gate.ok) {
+      await destroySession();
+      return null;
+    }
+  }
+
   return {
     ...session.user,
     sessionId: session.id,

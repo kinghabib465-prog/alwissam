@@ -8,8 +8,10 @@ function memoryLimit(params: {
   key: string;
   limit: number;
   windowMs: number;
+  increment?: boolean;
 }): { allowed: boolean; remaining: number; resetAt: number } {
   const now = Date.now();
+  const increment = params.increment !== false;
   const existing = memory.get(params.key);
   const bucket =
     existing && existing.resetAt > now
@@ -21,8 +23,13 @@ function memoryLimit(params: {
     return { allowed: false, remaining: 0, resetAt: bucket.resetAt };
   }
 
-  bucket.count += 1;
-  memory.set(params.key, bucket);
+  if (increment) {
+    bucket.count += 1;
+    memory.set(params.key, bucket);
+  } else {
+    memory.set(params.key, bucket);
+  }
+
   return {
     allowed: true,
     remaining: Math.max(0, params.limit - bucket.count),
@@ -34,13 +41,16 @@ export async function rateLimit(params: {
   key: string;
   limit: number;
   windowMs: number;
+  /** عند false يتحقق فقط دون احتساب محاولة (مفيد لنجاح الدخول) */
+  increment?: boolean;
 }): Promise<{ allowed: boolean; remaining: number; resetAt: number }> {
   const now = Date.now();
+  const increment = params.increment !== false;
   const cacheKey = `rl:${params.key}`;
   const hasRedis = !!process.env.REDIS_URL?.trim();
 
   if (!hasRedis) {
-    return memoryLimit(params);
+    return memoryLimit({ ...params, increment });
   }
 
   try {
@@ -54,15 +64,18 @@ export async function rateLimit(params: {
       return { allowed: false, remaining: 0, resetAt: bucket.resetAt };
     }
 
-    bucket.count += 1;
-    const ttl = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
-    await cacheSet(cacheKey, bucket, ttl);
+    if (increment) {
+      bucket.count += 1;
+      const ttl = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
+      await cacheSet(cacheKey, bucket, ttl);
+    }
+
     return {
       allowed: true,
       remaining: Math.max(0, params.limit - bucket.count),
       resetAt: bucket.resetAt,
     };
   } catch {
-    return memoryLimit(params);
+    return memoryLimit({ ...params, increment });
   }
 }

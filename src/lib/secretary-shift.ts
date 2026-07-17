@@ -4,33 +4,64 @@ function parseHhMm(hhmm: string) {
   return (h || 0) * 60 + (m || 0);
 }
 
+function algiersNowParts(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Algiers",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const weekday = parts.find((p) => p.type === "weekday")?.value || "Sun";
+  const hour = Number(parts.find((p) => p.type === "hour")?.value);
+  const minute = Number(parts.find((p) => p.type === "minute")?.value);
+  const weekdayMap: Record<string, string> = {
+    Sun: "SUN",
+    Mon: "MON",
+    Tue: "TUE",
+    Wed: "WED",
+    Thu: "THU",
+    Fri: "FRI",
+    Sat: "SAT",
+  };
+  return {
+    dayCode: weekdayMap[weekday] || "SUN",
+    minutes:
+      (Number.isFinite(hour) ? hour : 0) * 60 +
+      (Number.isFinite(minute) ? minute : 0),
+  };
+}
+
 export function isWithinSecretaryShift(profile: {
   workStartTime: string;
   workEndTime: string;
   workDays: string;
 }): { ok: boolean; message?: string } {
-  const now = new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Africa/Algiers" }),
-  );
-  const dayMap = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-  const today = dayMap[now.getDay()]!;
+  const { dayCode: today, minutes } = algiersNowParts();
   const days = profile.workDays
     .split(",")
     .map((d) => d.trim().toUpperCase())
     .filter(Boolean);
 
-  if (days.length > 0 && !days.includes(today)) {
+  if (days.length === 0) {
+    return {
+      ok: false,
+      message: "لا توجد أيام عمل محددة لهذا الحساب — راجعي صاحبة العيادة",
+    };
+  }
+
+  if (!days.includes(today)) {
     return {
       ok: false,
       message: "اليوم خارج أيام عمل حساب السكرتارية",
     };
   }
 
-  const minutes = now.getHours() * 60 + now.getMinutes();
   const start = parseHhMm(profile.workStartTime);
   const end = parseHhMm(profile.workEndTime);
 
-  if (minutes < start || minutes > end) {
+  // نهاية الدوام غير شاملة — عند 14:00 ينتهي الصباحي
+  if (minutes < start || minutes >= end) {
     return {
       ok: false,
       message: `حسابك من ${profile.workStartTime} إلى ${profile.workEndTime} فقط`,

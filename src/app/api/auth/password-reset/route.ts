@@ -6,14 +6,20 @@ import { createAuditLog } from "@/lib/audit/log";
 import { rateLimit } from "@/lib/auth/rate-limit";
 
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get("x-forwarded-for") || "unknown";
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    "unknown";
   const rl = await rateLimit({ key: `forgot:${ip}`, limit: 5, windowMs: 60 * 60 * 1000 });
   if (!rl.allowed) {
     return NextResponse.json({ error: "محاولات كثيرة" }, { status: 429 });
   }
 
   const body = await req.json().catch(() => ({}));
-  const identifier = String(body.identifier || "");
+  const identifier = String(body.identifier || "").trim();
+  const normalizedIdentifier = identifier.includes("@")
+    ? identifier.toLowerCase()
+    : identifier;
   if (!identifier) {
     return NextResponse.json({ error: "أدخل البريد أو الهاتف" }, { status: 400 });
   }
@@ -21,7 +27,15 @@ export async function POST(req: NextRequest) {
   const user = await prisma.user.findFirst({
     where: {
       deletedAt: null,
-      OR: [{ email: identifier }, { phone: identifier }],
+      OR: [
+        {
+          email: {
+            equals: normalizedIdentifier,
+            mode: "insensitive",
+          },
+        },
+        { phone: normalizedIdentifier },
+      ],
     },
   });
 
@@ -60,8 +74,24 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    "unknown";
+  const rl = await rateLimit({
+    key: `reset:${ip}`,
+    limit: 10,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "محاولات كثيرة. حاول لاحقًا." },
+      { status: 429 },
+    );
+  }
+
   const body = await req.json().catch(() => ({}));
-  const token = String(body.token || "");
+  const token = String(body.token || "").trim();
   const password = String(body.password || "");
   if (!token || password.length < 8) {
     return NextResponse.json({ error: "بيانات غير صالحة" }, { status: 400 });
@@ -83,6 +113,10 @@ export async function PUT(req: NextRequest) {
       where: { id: record.id },
       data: { usedAt: new Date() },
     }),
+    prisma.session.updateMany({
+      where: { userId: record.userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    }),
   ]);
 
   await createAuditLog({
@@ -90,6 +124,7 @@ export async function PUT(req: NextRequest) {
     action: "PASSWORD_RESET_COMPLETED",
     entityType: "User",
     entityId: record.userId,
+    ipAddress: ip,
   });
 
   return NextResponse.json({ ok: true, message: "تم تحديث كلمة المرور" });

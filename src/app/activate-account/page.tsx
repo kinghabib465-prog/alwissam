@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ClinicLogo } from "@/components/branding/ClinicLogo";
+import { AuthPageShell } from "@/components/auth/AuthPageShell";
+import { PasswordInput } from "@/components/auth/PasswordInput";
 import { Button } from "@/components/ui/Button";
 import { FormField, Input } from "@/components/ui/Form";
 
@@ -10,52 +11,85 @@ export default function ActivateAccountPage() {
   const router = useRouter();
   const [token, setToken] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
-    setError("");
-    const res = await fetch("/api/auth/activate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error || "فشل التفعيل");
-      setLoading(false);
+    if (password !== confirmPassword) {
+      setError("كلمتا المرور غير متطابقتين");
       return;
     }
-    router.push("/patient/login");
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/auth/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || "فشل تفعيل الحساب");
+        return;
+      }
+      router.replace("/patient/login");
+    } catch {
+      setError("تعذر الاتصال بالخادم");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <form onSubmit={onSubmit} className="card-surface w-full max-w-md space-y-4 p-6">
-        <ClinicLogo />
-        <h1 className="text-2xl font-bold text-navy">تفعيل حساب المريض</h1>
-        <p className="text-sm text-muted">
-          أدخل رمز التفعيل المرسل إليك بعد موافقة الطبيب، ثم أنشئ كلمة المرور.
-        </p>
-        <FormField label="رمز التفعيل">
-          <Input value={token} onChange={(e) => setToken(e.target.value)} required />
-        </FormField>
-        <FormField label="كلمة المرور">
+    <AuthPageShell
+      eyebrow="بوابة المرضى"
+      title="تفعيل حساب المريض"
+      description="أدخل رمز التفعيل الذي استلمته من العيادة، ثم أنشئ كلمة مرور آمنة."
+      alternateHref="/patient/login"
+      alternateLabel="لديك حساب؟ تسجيل الدخول"
+    >
+      <form onSubmit={onSubmit} className="space-y-4">
+        <FormField label="رمز التفعيل" htmlFor="token">
           <Input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            minLength={8}
+            id="token"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            autoComplete="one-time-code"
             required
           />
         </FormField>
-        {error && <p className="text-sm text-danger">{error}</p>}
+        <FormField label="كلمة المرور" htmlFor="password">
+          <PasswordInput
+            id="password"
+            value={password}
+            onChange={setPassword}
+            autoComplete="new-password"
+            minLength={8}
+          />
+        </FormField>
+        <FormField label="تأكيد كلمة المرور" htmlFor="confirmPassword">
+          <PasswordInput
+            id="confirmPassword"
+            value={confirmPassword}
+            onChange={setConfirmPassword}
+            autoComplete="new-password"
+            minLength={8}
+          />
+        </FormField>
+        {error && (
+          <p
+            className="rounded-xl bg-[#FDECEE] px-3 py-2 text-sm text-danger"
+            role="alert"
+          >
+            {error}
+          </p>
+        )}
         <Button type="submit" loading={loading} className="w-full">
           تفعيل الحساب
         </Button>
       </form>
-    </div>
+    </AuthPageShell>
   );
 }
