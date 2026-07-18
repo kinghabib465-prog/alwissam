@@ -115,8 +115,7 @@ async function sendViaSmtp(input: SendEmailInput) {
 }
 
 /**
- * إرسال بريد — Resend ثم Brevo ثم SMTP.
- * يرمي خطأ إن لم يُضبط أي مزوّد أو فشل الإرسال.
+ * إرسال بريد — يجرّب Resend ثم Brevo ثم SMTP مع failover عند فشل المزود.
  */
 export async function sendEmail(input: SendEmailInput) {
   const to = input.to.trim().toLowerCase();
@@ -124,17 +123,33 @@ export async function sendEmail(input: SendEmailInput) {
     throw new Error("عنوان بريد غير صالح");
   }
 
-  const viaResend = await sendViaResend({ ...input, to });
-  if (viaResend) return viaResend;
+  const errors: string[] = [];
 
-  const viaBrevo = await sendViaBrevo({ ...input, to });
-  if (viaBrevo) return viaBrevo;
+  try {
+    const viaResend = await sendViaResend({ ...input, to });
+    if (viaResend) return viaResend;
+  } catch (err) {
+    errors.push(err instanceof Error ? err.message : "Resend failed");
+  }
 
-  const viaSmtp = await sendViaSmtp({ ...input, to });
-  if (viaSmtp) return viaSmtp;
+  try {
+    const viaBrevo = await sendViaBrevo({ ...input, to });
+    if (viaBrevo) return viaBrevo;
+  } catch (err) {
+    errors.push(err instanceof Error ? err.message : "Brevo failed");
+  }
+
+  try {
+    const viaSmtp = await sendViaSmtp({ ...input, to });
+    if (viaSmtp) return viaSmtp;
+  } catch (err) {
+    errors.push(err instanceof Error ? err.message : "SMTP failed");
+  }
 
   throw new Error(
-    "البريد غير مضبوط — أضف BREVO_API_KEY أو RESEND_API_KEY أو SMTP_HOST/SMTP_USER/SMTP_PASS/SMTP_FROM",
+    errors.length
+      ? `فشل إرسال البريد: ${errors.join(" | ")}`
+      : "البريد غير مضبوط — أضف BREVO_API_KEY أو RESEND_API_KEY أو SMTP_HOST/SMTP_USER/SMTP_PASS/SMTP_FROM",
   );
 }
 

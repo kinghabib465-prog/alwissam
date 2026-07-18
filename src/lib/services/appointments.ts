@@ -9,6 +9,7 @@ import { generateNumber } from "@/lib/utils";
 import { createAuditLog } from "@/lib/audit/log";
 import { publishEvent } from "@/lib/db/redis";
 import { algiersDayBounds } from "@/lib/daily-queue";
+import { periodFromStartAt } from "@/lib/doctor-availability";
 
 const DAY_MAP: DayOfWeek[] = [
   "SUNDAY",
@@ -25,18 +26,43 @@ function toMinutes(hhmm: string) {
   return h * 60 + m;
 }
 
+function algiersWeekdayFromDate(date: Date): DayOfWeek {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Algiers",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const y = Number(parts.find((p) => p.type === "year")!.value);
+  const m = Number(parts.find((p) => p.type === "month")!.value);
+  const d = Number(parts.find((p) => p.type === "day")!.value);
+  const idx = new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).getUTCDay();
+  return DAY_MAP[idx]!;
+}
+
+function algiersMinutesFromDate(date: Date): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Algiers",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value);
+  const minute = Number(parts.find((p) => p.type === "minute")?.value);
+  return (Number.isFinite(hour) ? hour : 0) * 60 + (Number.isFinite(minute) ? minute : 0);
+}
+
 export async function isDoctorAvailable(params: {
   doctorId: string;
   startAt: Date;
   endAt: Date;
   ignoreAppointmentId?: string;
-  /** حجز باليوم فقط — بدون التحقق من تعارض الساعات */
+  /** حجز باليوم/الفترة — بدون تعارض دقيقة بدقيقة، مع سقف للفترة */
   dayOnly?: boolean;
 }) {
-  const day = DAY_MAP[params.startAt.getDay()];
-  const startMin =
-    params.startAt.getHours() * 60 + params.startAt.getMinutes();
-  const endMin = params.endAt.getHours() * 60 + params.endAt.getMinutes();
+  const day = algiersWeekdayFromDate(params.startAt);
+  const startMin = algiersMinutesFromDate(params.startAt);
+  const endMin = algiersMinutesFromDate(params.endAt);
 
   const workingHours = await prisma.workingHour.findMany({
     where: { doctorId: params.doctorId, dayOfWeek: day, isActive: true },
@@ -75,7 +101,38 @@ export async function isDoctorAvailable(params: {
   }
 
   if (params.dayOnly) {
-    return { ok: true };
+    const { start, end } = algiersDayBounds(params.startAt);
+    const maxPerShift = Number(process.env.MAX_APPOINTMENTS_PER_SHIFT || 40);
+    const targetPeriod = periodFromStartAt(params.startAt);
+    const dayAppointments = await prisma.appointment.findMany({
+      where: {
+        doctorId: params.doctorId,
+        deletedAt: null,
+        id: params.ignoreAppointmentId ? { not: params.ignoreAppointmentId } : undefined,
+        startAt: { gte: start, lt: end },
+        status: {
+          notIn: [
+            "CANCELLED_BY_CLINIC",
+            "CANCELLED_BY_PATIENT",
+            "NO_SHOW",
+            "RESCHEDULED",
+          ],
+        },
+      },
+      select: { startAt: true },
+    });
+    const samePeriod = dayAppointments.filter((a) => {
+      const p = periodFromStartAt(a.startAt);
+      if (targetPeriod === "EVENING") return p === "EVENING";
+      return p === "MORNING" || p === "DAY";
+    });
+    if (samePeriod.length >= maxPerShift) {
+      return {
+        ok: false,
+        reason: `اكتمل الحد الأقصى للمواعيد في هذه الفترة (${maxPerShift})`,
+      };
+    }
+    return { ok: true as const };
   }
 
   const conflict = await prisma.appointment.findFirst({
@@ -140,7 +197,31 @@ export async function createAppointmentRequest(input: {
 
   const { ymd, start, end } = algiersDayBounds();
 
+  const phoneTrim = input.phone?.trim() || "";
+  if (phoneTrim.length >= 8) {
+    const duplicate = await prisma.appointmentRequest.findFirst({
+      where: {
+        phone: phoneTrim,
+        createdAt: { gte: start, lt: end },
+        status: {
+          in: ["NEW_REQUEST", "EMERGENCY", "UNDER_SECRETARY_REVIEW", "WAITING_ROOM"],
+        },
+        appointmentId: null,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (duplicate) {
+      const q =
+        duplicate.requestNumber.match(/^\d{8}-(\d+)$/)?.[1] ||
+        duplicate.requestNumber;
+      return { ...duplicate, queueNumber: Number(q) || 0 };
+    }
+  }
+
   const { request, queueNumber } = await prisma.$transaction(async (tx) => {
+    // قفل يومي ذري — يمنع تكرار رقم الترتيب عند التسجيل المتزامن
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`alwisam-queue-${ymd}`}))`;
+
     const todayCount = await tx.appointmentRequest.count({
       where: { createdAt: { gte: start, lt: end } },
     });
@@ -152,7 +233,7 @@ export async function createAppointmentRequest(input: {
       data: {
         requestNumber,
         fullName: input.fullName,
-        phone: input.phone?.trim() || "",
+        phone: phoneTrim,
         age: input.age,
         dateOfBirth: input.dateOfBirth ? new Date(input.dateOfBirth) : undefined,
         gender: input.gender,
@@ -736,11 +817,16 @@ export async function checkInScheduledAppointment(params: {
     throw new Error("لا يمكن إدخال هذا الموعد");
   }
 
-  // لا تُدخل مريضاً لديه حضور فعّال في العيادة (انتظار / معاينة)
-  const { start: dayStart, end: dayEnd } = await import("@/lib/daily-queue").then(
-    (m) => m.algiersDayBounds(),
-  );
+  const { algiersDayBounds } = await import("@/lib/daily-queue");
   const { IN_CLINIC_BUSY_STATUSES } = await import("@/lib/clinic-day-tracking");
+  const { start: dayStart, end: dayEnd } = algiersDayBounds();
+
+  if (
+    appointment.startAt < dayStart ||
+    appointment.startAt >= dayEnd
+  ) {
+    throw new Error("يمكن إدخال مواعيد اليوم الحالي فقط");
+  }
   const busy = await prisma.waitingRoomEntry.findFirst({
     where: {
       patientId: appointment.patientId,

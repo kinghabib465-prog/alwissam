@@ -35,6 +35,8 @@ type IntakeRequest = {
   isPreviousPatient?: boolean | null;
   appointmentType: string;
   reason?: string | null;
+  requestNumber?: string | null;
+  queueNumber?: number | null;
 };
 
 type OpenInvoice = {
@@ -288,7 +290,11 @@ export function SecretaryReceptionHub({
                     isPreviousPatient={req.isPreviousPatient ?? undefined}
                     appointmentType={req.appointmentType}
                     reason={req.reason}
-                    queueOrder={index + 1}
+                    queueOrder={
+                      req.queueNumber && req.queueNumber > 0
+                        ? req.queueNumber
+                        : index + 1
+                    }
                     doctors={doctors}
                     csrfToken={csrfToken}
                   />

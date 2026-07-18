@@ -93,12 +93,12 @@ export async function listSecretaryTodayPendingCheckIns() {
     all.push(apt);
   }
 
-  function byNameThenTime(a: AptRow, b: AptRow) {
-    const n = a.patient.fullName.localeCompare(b.patient.fullName, "ar", {
+  function byTimeThenName(a: AptRow, b: AptRow) {
+    const t = a.startAt.getTime() - b.startAt.getTime();
+    if (t !== 0) return t;
+    return a.patient.fullName.localeCompare(b.patient.fullName, "ar", {
       sensitivity: "base",
     });
-    if (n !== 0) return n;
-    return a.startAt.getTime() - b.startAt.getTime();
   }
 
   const morning = all
@@ -106,10 +106,10 @@ export async function listSecretaryTodayPendingCheckIns() {
       const p = periodFromStartAt(a.startAt);
       return p === "MORNING" || p === "DAY";
     })
-    .sort(byNameThenTime);
+    .sort(byTimeThenName);
   const evening = all
     .filter((a) => periodFromStartAt(a.startAt) === "EVENING")
-    .sort(byNameThenTime);
+    .sort(byTimeThenName);
 
   // القائمة حسب الفترة الحالية للتبسيط — مع الإبقاء على المتأخرين
   let pending = [...morning, ...evening];

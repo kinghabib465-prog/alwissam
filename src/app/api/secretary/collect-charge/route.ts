@@ -25,89 +25,114 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "الفاتورة مطلوبة" }, { status: 400 });
   }
 
-  const invoice = await prisma.invoice.findUnique({
-    where: { id: invoiceId },
-    include: { patient: true },
-  });
-  if (!invoice) {
-    return NextResponse.json({ error: "الفاتورة غير موجودة" }, { status: 404 });
-  }
-  if (invoice.status === "PAID" || invoice.status === "VOIDED") {
-    return NextResponse.json({ error: "الفاتورة مغلقة" }, { status: 400 });
-  }
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM "Invoice" WHERE id = ${invoiceId} FOR UPDATE`;
 
-  const remaining = new Prisma.Decimal(invoice.remainingAmount);
-  if (remaining.lessThanOrEqualTo(0)) {
-    return NextResponse.json({ error: "لا يوجد متبقي" }, { status: 400 });
-  }
+      const invoice = await tx.invoice.findUnique({
+        where: { id: invoiceId },
+        include: { patient: true },
+      });
+      if (!invoice) throw new Error("الفاتورة غير موجودة");
+      if (invoice.status === "PAID" || invoice.status === "VOIDED") {
+        throw new Error("الفاتورة مغلقة");
+      }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.payment.create({
-      data: {
-        invoiceId,
-        amount: remaining,
-        method: method as "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER",
-        receiptNumber: generateNumber("RCP"),
-        createdById: user.id,
-        notes: `استلام مبلغ المعاينة بواسطة ${user.fullName}`,
-      },
-    });
+      const remaining = new Prisma.Decimal(invoice.remainingAmount);
+      if (remaining.lessThanOrEqualTo(0)) {
+        throw new Error("لا يوجد متبقي");
+      }
 
-    await tx.invoice.update({
-      where: { id: invoiceId },
-      data: {
-        paidAmount: invoice.totalAmount,
-        remainingAmount: new Prisma.Decimal(0),
-        status: "PAID",
-      },
-    });
+      const aptId = appointmentId || invoice.appointmentId;
+      if (appointmentId && invoice.appointmentId && appointmentId !== invoice.appointmentId) {
+        throw new Error("الموعد لا يطابق الفاتورة");
+      }
 
-    const aptId = appointmentId || invoice.appointmentId;
-    if (aptId) {
-      const apt = await tx.appointment.findUnique({ where: { id: aptId } });
-      if (apt) {
-        await tx.appointment.update({
-          where: { id: aptId },
-          data: {
-            status: "COMPLETED",
-            statusHistory: {
-              create: {
-                previousStatus: apt.status,
-                newStatus: "COMPLETED",
-                changedById: user.id,
-                reason: `استلام الدفع بواسطة ${user.fullName}`,
+      if (entryId) {
+        const entry = await tx.waitingRoomEntry.findUnique({ where: { id: entryId } });
+        if (!entry) throw new Error("سجل الانتظار غير موجود");
+        if (aptId && entry.appointmentId !== aptId) {
+          throw new Error("سجل الانتظار لا يطابق الموعد");
+        }
+        if (entry.patientId !== invoice.patientId) {
+          throw new Error("سجل الانتظار لا يطابق المريض");
+        }
+        if (!["SESSION_DONE", "WAITING", "ARRIVED", "WITH_DOCTOR"].includes(entry.status)) {
+          throw new Error("حالة الانتظار لا تسمح بالدفع");
+        }
+      }
+
+      await tx.payment.create({
+        data: {
+          invoiceId,
+          amount: remaining,
+          method: method as "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER",
+          receiptNumber: generateNumber("RCP"),
+          createdById: user.id,
+          notes: `استلام مبلغ المعاينة بواسطة ${user.fullName}`,
+        },
+      });
+
+      await tx.invoice.update({
+        where: { id: invoiceId },
+        data: {
+          paidAmount: invoice.totalAmount,
+          remainingAmount: new Prisma.Decimal(0),
+          status: "PAID",
+        },
+      });
+
+      if (aptId) {
+        const apt = await tx.appointment.findUnique({ where: { id: aptId } });
+        if (apt) {
+          await tx.appointment.update({
+            where: { id: aptId },
+            data: {
+              status: "COMPLETED",
+              statusHistory: {
+                create: {
+                  previousStatus: apt.status,
+                  newStatus: "COMPLETED",
+                  changedById: user.id,
+                  reason: `استلام الدفع بواسطة ${user.fullName}`,
+                },
               },
             },
+          });
+        }
+      }
+
+      if (entryId) {
+        await tx.waitingRoomEntry.update({
+          where: { id: entryId },
+          data: { status: "LEFT", completedAt: new Date(), note: "تم الدفع" },
+        });
+      } else if (invoice.appointmentId) {
+        await tx.waitingRoomEntry.updateMany({
+          where: {
+            appointmentId: invoice.appointmentId,
+            status: { not: "LEFT" },
           },
+          data: { status: "LEFT", completedAt: new Date(), note: "تم الدفع" },
         });
       }
-    }
+    });
 
-    if (entryId) {
-      await tx.waitingRoomEntry.update({
-        where: { id: entryId },
-        data: { status: "LEFT", completedAt: new Date(), note: "تم الدفع" },
-      });
-    } else if (invoice.appointmentId) {
-      await tx.waitingRoomEntry.updateMany({
-        where: {
-          appointmentId: invoice.appointmentId,
-          status: { not: "LEFT" },
-        },
-        data: { status: "LEFT", completedAt: new Date(), note: "تم الدفع" },
-      });
-    }
-  });
+    await createAuditLog({
+      userId: user.id,
+      roleCode: user.role.code,
+      action: "DOCTOR_CHARGE_COLLECTED",
+      entityType: "Invoice",
+      entityId: invoiceId,
+      newValue: { method },
+      reason: `استلام دفع بواسطة ${user.fullName}`,
+    });
 
-  await createAuditLog({
-    userId: user.id,
-    roleCode: user.role.code,
-    action: "DOCTOR_CHARGE_COLLECTED",
-    entityType: "Invoice",
-    entityId: invoiceId,
-    newValue: { amount: Number(remaining), method },
-    reason: `استلام دفع ${invoice.patient.fullName} بواسطة ${user.fullName}`,
-  });
-
-  return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "فشل الاستلام" },
+      { status: 400 },
+    );
+  }
 }

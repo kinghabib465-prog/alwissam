@@ -10,7 +10,7 @@ import {
   type ReceptionTab,
 } from "@/components/secretary/SecretaryReceptionHub";
 import { SecretaryWorkflowGuide } from "@/components/secretary/SecretaryWorkflowGuide";
-import { algiersDayBounds } from "@/lib/daily-queue";
+import { algiersDayBounds, dailyQueueFromRequestNumber } from "@/lib/daily-queue";
 import {
   algiersWeekday,
   listSecretaryTodayPendingCheckIns,
@@ -75,17 +75,21 @@ export default async function SecretaryDashboardPage({
   const { start, end } = algiersDayBounds();
   const today = algiersWeekday();
 
+  const weekAgo = new Date(start.getTime() - 7 * 24 * 60 * 60 * 1000);
+
   const [waiting, todayPending, doctors, directed, payments, rejected] =
     await Promise.all([
       prisma.appointmentRequest.findMany({
         where: {
+          appointmentId: null,
           status: {
             in: ["NEW_REQUEST", "EMERGENCY", "UNDER_SECRETARY_REVIEW"],
           },
-          createdAt: { gte: start, lt: end },
+          // اليوم + أي طلب غير موجه من آخر 7 أيام (لا يختفي بين النوبتين/الأيام)
+          createdAt: { gte: weekAgo },
         },
         orderBy: { createdAt: "asc" },
-        take: 100,
+        take: 150,
       }),
       listSecretaryTodayPendingCheckIns(),
       loadSecretaryDoctorsForDay(today),
@@ -120,17 +124,22 @@ export default async function SecretaryDashboardPage({
           clinicShift={todayPending.clinicShift}
           morning={todayPending.morning.map(mapApt)}
           evening={todayPending.evening.map(mapApt)}
-          intakeRequests={waiting.map((req) => ({
-            id: req.id,
-            fullName: req.fullName,
-            phone: req.phone,
-            age: req.age,
-            city: req.city,
-            chronicIllnesses: req.chronicIllnesses,
-            isPreviousPatient: req.isPreviousPatient,
-            appointmentType: req.appointmentType,
-            reason: req.reason,
-          }))}
+          intakeRequests={waiting.map((req) => {
+            const fromNumber = dailyQueueFromRequestNumber(req.requestNumber);
+            return {
+              id: req.id,
+              fullName: req.fullName,
+              phone: req.phone,
+              age: req.age,
+              city: req.city,
+              chronicIllnesses: req.chronicIllnesses,
+              isPreviousPatient: req.isPreviousPatient,
+              appointmentType: req.appointmentType,
+              reason: req.reason,
+              requestNumber: req.requestNumber,
+              queueNumber: fromNumber ? Number(fromNumber) : null,
+            };
+          })}
           windows={directed.windows}
           openInvoices={payments.openInvoices}
           recentPayments={payments.recentPayments}

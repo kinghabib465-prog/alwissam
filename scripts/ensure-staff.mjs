@@ -81,19 +81,19 @@ async function upsertStaffUser(prisma, {
 }) {
   const safePhone = await resolveUniquePhone(prisma, email, phone);
   const existing = await prisma.user.findUnique({ where: { email } });
+  const forceSeedPassword = process.env.FORCE_SEED_PASSWORD === "1";
 
   if (existing) {
+    // لا تعِد كتابة كلمة المرور عند كل إقلاع — إلا إذا طُلب صراحةً
     return prisma.user.update({
       where: { email },
       data: {
         fullName,
         ...(safePhone !== undefined ? { phone: safePhone } : {}),
-        passwordHash,
+        ...(forceSeedPassword ? { passwordHash } : {}),
         roleId,
-        status: "ACTIVE",
+        status: existing.status === "LOCKED" ? existing.status : "ACTIVE",
         deletedAt: null,
-        failedLoginCount: 0,
-        lockedUntil: null,
       },
     });
   }
@@ -169,17 +169,16 @@ export async function ensureStaff() {
     await prisma.secretaryProfile.upsert({
       where: { userId: secretaryUser.id },
       update: {
+        // لا تمس ساعات/أيام النوبة المضبوطة من لوحة الإدارة
         employeeCode: "SEC-001",
-        shiftCode: "MORNING",
-        workStartTime: "00:00",
-        workEndTime: "23:59",
       },
       create: {
         userId: secretaryUser.id,
         employeeCode: "SEC-001",
         shiftCode: "MORNING",
-        workStartTime: "00:00",
-        workEndTime: "23:59",
+        workStartTime: "07:00",
+        workEndTime: "14:00",
+        workDays: "SUN,MON,TUE,WED,THU,FRI,SAT",
       },
     });
 

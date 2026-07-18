@@ -48,6 +48,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "الموعد غير موجود" }, { status: 404 });
   }
 
+  const waitingEntry = await prisma.waitingRoomEntry.findUnique({
+    where: { id: entryId },
+  });
+  if (!waitingEntry) {
+    return NextResponse.json({ error: "سجل الانتظار غير موجود" }, { status: 404 });
+  }
+  if (waitingEntry.appointmentId !== appointmentId) {
+    return NextResponse.json(
+      { error: "سجل الانتظار لا يطابق الموعد" },
+      { status: 400 },
+    );
+  }
+  if (waitingEntry.patientId !== patientId || appointment.patientId !== patientId) {
+    return NextResponse.json(
+      { error: "المريض لا يطابق الموعد/الانتظار" },
+      { status: 400 },
+    );
+  }
+  if (!["SESSION_DONE", "WAITING", "ARRIVED", "WITH_DOCTOR"].includes(waitingEntry.status)) {
+    return NextResponse.json(
+      { error: "لا يمكن إنهاء الزيارة في هذه الحالة" },
+      { status: 400 },
+    );
+  }
+
   const coverageLabel = coverageAr[coverage];
   let activationHint = "";
   let pendingActivation: {

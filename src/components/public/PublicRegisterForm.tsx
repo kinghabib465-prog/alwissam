@@ -25,10 +25,15 @@ export function PublicRegisterForm() {
     appointmentType: "GENERAL_EXAM",
     customReason: "",
     isFirstVisit: true,
+    consentAccepted: false,
   });
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!form.consentAccepted) {
+      setError("يجب الموافقة على تسجيل البيانات في العيادة");
+      return;
+    }
     if (isOtherVisitReason(form.appointmentType) && !form.customReason.trim()) {
       setError("اكتب سبب الزيارة عند اختيار «أخرى»");
       return;
@@ -52,7 +57,7 @@ export function PublicRegisterForm() {
           isEmergency: form.appointmentType === "EMERGENCY",
           reason: reasonLabel,
           isPreviousPatient: !form.isFirstVisit,
-          consentAccepted: true,
+          consentAccepted: form.consentAccepted,
         }),
       });
       const data = await res.json();
@@ -71,6 +76,7 @@ export function PublicRegisterForm() {
         appointmentType: "GENERAL_EXAM",
         customReason: "",
         isFirstVisit: true,
+        consentAccepted: false,
       });
     } catch {
       setError("تعذر الاتصال بالخادم");
@@ -188,6 +194,19 @@ export function PublicRegisterForm() {
           }
         />
         أول زيارة
+      </label>
+
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          className="mt-1"
+          checked={form.consentAccepted}
+          onChange={(e) =>
+            setForm({ ...form, consentAccepted: e.target.checked })
+          }
+          required
+        />
+        أوافق على تسجيل بياناتي في العيادة.
       </label>
 
       {error && <p className="text-sm text-danger">{error}</p>}

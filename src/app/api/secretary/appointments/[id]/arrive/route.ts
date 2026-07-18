@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/current-user";
-import { prisma } from "@/lib/db/prisma";
-import { createAuditLog } from "@/lib/audit/log";
-import { publishEvent } from "@/lib/db/redis";
+import { checkInScheduledAppointment } from "@/lib/services/appointments";
 
+/** تسجيل وصول موعد مجدول — نفس قواعد scheduled-check-in */
 export async function POST(
   req: NextRequest,
   context: { params: Promise<{ id: string }> },
@@ -17,54 +16,22 @@ export async function POST(
   }
 
   const { id } = await context.params;
-  const appointment = await prisma.appointment.findUnique({ where: { id } });
-  if (!appointment) {
-    return NextResponse.json({ error: "الموعد غير موجود" }, { status: 404 });
+  const body = await req.json().catch(() => ({}));
+  const doctorId = body.doctorId ? String(body.doctorId) : undefined;
+
+  try {
+    const result = await checkInScheduledAppointment({
+      appointmentId: id,
+      userId: user.id,
+      roleCode: user.role.code,
+      userName: user.fullName,
+      doctorId,
+    });
+    return NextResponse.json({ ok: true, entry: result.entry });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "فشلت العملية" },
+      { status: 400 },
+    );
   }
-
-  const entry = await prisma.$transaction(async (tx) => {
-    await tx.appointment.update({
-      where: { id },
-      data: {
-        status: "PATIENT_ARRIVED",
-        statusHistory: {
-          create: {
-            previousStatus: appointment.status,
-            newStatus: "PATIENT_ARRIVED",
-            changedById: user.id,
-            reason: `تم تسجيل الوصول بواسطة ${user.fullName}`,
-          },
-        },
-      },
-    });
-
-    return tx.waitingRoomEntry.upsert({
-      where: { appointmentId: id },
-      update: {
-        status: "ARRIVED",
-        arrivedAt: new Date(),
-        urgency: appointment.isEmergency,
-      },
-      create: {
-        appointmentId: id,
-        patientId: appointment.patientId,
-        doctorId: appointment.doctorId,
-        status: "ARRIVED",
-        urgency: appointment.isEmergency,
-      },
-    });
-  });
-
-  await createAuditLog({
-    userId: user.id,
-    roleCode: user.role.code,
-    action: "PATIENT_ARRIVED",
-    entityType: "Appointment",
-    entityId: id,
-    reason: `تم تسجيل الوصول بواسطة ${user.fullName}`,
-  });
-
-  await publishEvent("clinic:waiting-room", { entryId: entry.id, status: "ARRIVED" });
-
-  return NextResponse.json({ ok: true, entry });
 }
