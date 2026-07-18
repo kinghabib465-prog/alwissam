@@ -57,3 +57,7 @@ next-env.d.ts
 /*.backup
 /backup-*.sql
 
+# Contabo deployment package (generated locally)
+/deploy/contabo/*.zip
+/deploy/contabo/.env.production
+

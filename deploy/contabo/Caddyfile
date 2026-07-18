@@ -1,0 +1,9 @@
+{
+	email {$ACME_EMAIL}
+}
+
+# اضبط DOMAIN في .env — نطاق (HTTPS تلقائي) أو IP السيرفر (HTTP مؤقت)
+{$DOMAIN} {
+	encode gzip zstd
+	reverse_proxy app:3000
+}

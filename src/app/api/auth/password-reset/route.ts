@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
           message:
             process.env.NODE_ENV === "development"
               ? "تعذر إرسال البريد — استخدم رابط التطوير أدناه"
-              : "تعذر إرسال البريد حالياً. تأكد من ضبط SMTP أو Resend في إعدادات الاستضافة.",
+              : "تعذر إرسال البريد حالياً. تأكد من ضبط BREVO_API_KEY أو SMTP أو Resend في إعدادات الاستضافة.",
           error: "EMAIL_SEND_FAILED",
           ...(process.env.NODE_ENV === "development" ? { devToken: token } : {}),
         });

@@ -24,7 +24,7 @@ export function PublicRegisterForm() {
     phone: "",
     appointmentType: "GENERAL_EXAM",
     customReason: "",
-    consentAccepted: false,
+    isFirstVisit: true,
   });
 
   async function onSubmit(e: React.FormEvent) {
@@ -51,7 +51,8 @@ export function PublicRegisterForm() {
           appointmentType: form.appointmentType,
           isEmergency: form.appointmentType === "EMERGENCY",
           reason: reasonLabel,
-          consentAccepted: form.consentAccepted,
+          isPreviousPatient: !form.isFirstVisit,
+          consentAccepted: true,
         }),
       });
       const data = await res.json();
@@ -69,7 +70,7 @@ export function PublicRegisterForm() {
         phone: "",
         appointmentType: "GENERAL_EXAM",
         customReason: "",
-        consentAccepted: false,
+        isFirstVisit: true,
       });
     } catch {
       setError("تعذر الاتصال بالخادم");
@@ -181,13 +182,12 @@ export function PublicRegisterForm() {
         <input
           type="checkbox"
           className="mt-1"
-          checked={form.consentAccepted}
+          checked={form.isFirstVisit}
           onChange={(e) =>
-            setForm({ ...form, consentAccepted: e.target.checked })
+            setForm({ ...form, isFirstVisit: e.target.checked })
           }
-          required
         />
-        أوافق على تسجيل بياناتي في العيادة.
+        أول زيارة
       </label>
 
       {error && <p className="text-sm text-danger">{error}</p>}

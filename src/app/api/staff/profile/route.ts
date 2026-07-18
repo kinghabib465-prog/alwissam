@@ -92,7 +92,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "لا يمكن تأكيد البريد: إعدادات الإرسال غير موجودة (SMTP أو RESEND_API_KEY).",
+            "لا يمكن تأكيد البريد: إعدادات الإرسال غير موجودة (BREVO_API_KEY أو SMTP أو RESEND).",
         },
         { status: 503 },
       );

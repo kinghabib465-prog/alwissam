@@ -36,6 +36,24 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+## الرفع على Contabo (VPS) — موصى به للعيادة
+
+دليل كامل: [`docs/CONTABO-DEPLOY.md`](docs/CONTABO-DEPLOY.md)  
+تسليم العميل: [`deploy/contabo/CLIENT-HANDOFF-AR.md`](deploy/contabo/CLIENT-HANDOFF-AR.md)
+
+```bash
+# على السيرفر (Ubuntu)
+sudo bash deploy/contabo/setup-server.sh
+cp deploy/contabo/.env.production.example .env && nano .env
+bash deploy/contabo/deploy.sh
+```
+
+تعبئة ZIP للرفع من Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/package-for-contabo.ps1
+```
+
 ## الرفع على منصات الاستضافة (Vercel / Render / Railway)
 
 نفس الكود المحلي يعمل على المنصات عبر متغيرات البيئة فقط (بدون `output: standalone` خارج Docker).

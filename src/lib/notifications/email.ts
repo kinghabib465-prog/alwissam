@@ -10,7 +10,12 @@ export type SendEmailInput = {
 
 export function isEmailConfigured() {
   if (process.env.RESEND_API_KEY?.trim()) return true;
-  return !!(process.env.SMTP_HOST?.trim() && process.env.SMTP_FROM?.trim());
+  if (process.env.BREVO_API_KEY?.trim()) return true;
+  return !!(
+    process.env.SMTP_HOST?.trim() &&
+    process.env.SMTP_USER?.trim() &&
+    process.env.SMTP_FROM?.trim()
+  );
 }
 
 function fromAddress() {
@@ -52,12 +57,41 @@ async function sendViaResend(input: SendEmailInput) {
   return { provider: "resend" as const };
 }
 
+/** Brevo Transactional API (مفتاح xkeysib-...) — ليس Campaigns */
+async function sendViaBrevo(input: SendEmailInput) {
+  const key = process.env.BREVO_API_KEY?.trim();
+  if (!key) return null;
+
+  const from = fromAddress();
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "api-key": key,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      sender: { name: clinicName(), email: from },
+      to: [{ email: input.to }],
+      subject: input.subject,
+      htmlContent: input.html,
+      textContent: input.text,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Brevo failed (${res.status}): ${body.slice(0, 300)}`);
+  }
+  return { provider: "brevo" as const };
+}
+
 async function sendViaSmtp(input: SendEmailInput) {
   const host = process.env.SMTP_HOST?.trim();
-  if (!host) return null;
+  const user = process.env.SMTP_USER?.trim();
+  if (!host || !user) return null;
 
   const port = Number(process.env.SMTP_PORT || 587);
-  const user = process.env.SMTP_USER?.trim();
   const pass = process.env.SMTP_PASS?.trim();
   const secure =
     process.env.SMTP_SECURE === "true" || port === 465;
@@ -66,7 +100,7 @@ async function sendViaSmtp(input: SendEmailInput) {
     host,
     port,
     secure,
-    auth: user ? { user, pass: pass || "" } : undefined,
+    auth: { user, pass: pass || "" },
   });
 
   await transporter.sendMail({
@@ -81,7 +115,7 @@ async function sendViaSmtp(input: SendEmailInput) {
 }
 
 /**
- * إرسال بريد — Resend أولاً إن وُجد، وإلا SMTP.
+ * إرسال بريد — Resend ثم Brevo ثم SMTP.
  * يرمي خطأ إن لم يُضبط أي مزوّد أو فشل الإرسال.
  */
 export async function sendEmail(input: SendEmailInput) {
@@ -93,11 +127,14 @@ export async function sendEmail(input: SendEmailInput) {
   const viaResend = await sendViaResend({ ...input, to });
   if (viaResend) return viaResend;
 
+  const viaBrevo = await sendViaBrevo({ ...input, to });
+  if (viaBrevo) return viaBrevo;
+
   const viaSmtp = await sendViaSmtp({ ...input, to });
   if (viaSmtp) return viaSmtp;
 
   throw new Error(
-    "البريد غير مضبوط — أضف RESEND_API_KEY أو SMTP_HOST/SMTP_USER/SMTP_PASS/SMTP_FROM",
+    "البريد غير مضبوط — أضف BREVO_API_KEY أو RESEND_API_KEY أو SMTP_HOST/SMTP_USER/SMTP_PASS/SMTP_FROM",
   );
 }
 

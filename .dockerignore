@@ -1,0 +1,16 @@
+node_modules
+.next
+.git
+.env
+.env.*
+!.env.example
+uploads/*
+!uploads/.gitkeep
+*.sql
+*.backup
+coverage
+.DS_Store
+*.tsbuildinfo
+.vercel
+docker-compose.override.yml
+deploy/contabo/*.zip

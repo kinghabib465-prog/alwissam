@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "إرسال البريد غير مضبوط على السيرفر. أضيفي SMTP أو RESEND_API_KEY في إعدادات الاستضافة.",
+          "إرسال البريد غير مضبوط على السيرفر. أضيفي BREVO_API_KEY أو SMTP أو RESEND في إعدادات الاستضافة.",
       },
       { status: 503 },
     );

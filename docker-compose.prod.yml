@@ -1,0 +1,122 @@
+# إنتاج Contabo / VPS — تشغيل: docker compose -f docker-compose.prod.yml up -d --build
+name: alwisam-prod
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: alwisam-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    networks:
+      - internal
+
+  redis:
+    image: redis:7-alpine
+    container_name: alwisam-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - internal
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: alwisam-app
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      DATABASE_SSL: "false"
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+      APP_NAME: ${APP_NAME:-عيادة الوسام لطب الأسنان}
+      SESSION_SECRET: ${SESSION_SECRET}
+      CSRF_SECRET: ${CSRF_SECRET}
+      SIGNED_URL_SECRET: ${SIGNED_URL_SECRET}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      SESSION_MAX_AGE_HOURS: ${SESSION_MAX_AGE_HOURS:-12}
+      SESSION_REMEMBER_DAYS: ${SESSION_REMEMBER_DAYS:-30}
+      MAX_LOGIN_ATTEMPTS: ${MAX_LOGIN_ATTEMPTS:-5}
+      LOCKOUT_MINUTES: ${LOCKOUT_MINUTES:-30}
+      UPLOAD_DIR: /app/uploads
+      MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-20}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      CLINIC_PHONE: ${CLINIC_PHONE:-}
+      CLINIC_EMAIL: ${CLINIC_EMAIL:-}
+      CLINIC_ADDRESS: ${CLINIC_ADDRESS:-}
+      SEED_SECRETARY1_EMAIL: ${SEED_SECRETARY1_EMAIL}
+      SEED_SECRETARY1_PHONE: ${SEED_SECRETARY1_PHONE}
+      SEED_SECRETARY1_PASSWORD: ${SEED_SECRETARY1_PASSWORD}
+      SEED_DOCTOR_SPECIALIST_EMAIL: ${SEED_DOCTOR_SPECIALIST_EMAIL}
+      SEED_DOCTOR_SPECIALIST_PHONE: ${SEED_DOCTOR_SPECIALIST_PHONE}
+      SEED_DOCTOR_SPECIALIST_PASSWORD: ${SEED_DOCTOR_SPECIALIST_PASSWORD}
+      SEED_DOCTOR_GENERAL_EMAIL: ${SEED_DOCTOR_GENERAL_EMAIL}
+      SEED_DOCTOR_GENERAL_PHONE: ${SEED_DOCTOR_GENERAL_PHONE}
+      SEED_DOCTOR_GENERAL_PASSWORD: ${SEED_DOCTOR_GENERAL_PASSWORD}
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+      - web
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: alwisam-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./deploy/contabo/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    networks:
+      - web
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+    internal: true
+  web:
