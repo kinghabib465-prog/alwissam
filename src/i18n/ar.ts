@@ -175,7 +175,7 @@ export const navDoctorSpecialistAr = [
       },
       {
         href: "/doctor/specialist/settings/day-records",
-        label: "تنظيف سجل يوم (منانة فقط)",
+        label: "تنظيف السجلات (منانة فقط)",
       },
     ],
   },
