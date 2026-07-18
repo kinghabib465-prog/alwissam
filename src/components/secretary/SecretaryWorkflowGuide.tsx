@@ -16,8 +16,9 @@ export function SecretaryWorkflowGuide() {
           حجز لهم الطبيب: صباح أو مساء حسب الوقت.
         </li>
         <li>
-          <span className="font-semibold text-navy">المدخل</span> — مريض جديد /
-          من الموقع ثم توجيه.
+          <span className="font-semibold text-navy">المدخل</span> — تسجيل
+          يومي جديد كل يوم (يبدأ من 1). طلبات الأمس غير الموجّهة تُغلق
+          تلقائياً.
         </li>
         <li>
           <span className="font-semibold text-navy">الانتظار</span> — راقبي من

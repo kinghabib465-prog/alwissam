@@ -48,7 +48,8 @@ export default async function HomePage() {
           التسجيل عند المدخل
         </h2>
         <p className="mb-6 text-center text-sm text-muted">
-          أدخل اسمك وسبب الزيارة — تحصل على ترتيبك لليوم فورًا
+          أدخل اسمك وسبب الزيارة — تحصل على ترتيبك لليوم فورًا (يُعاد من 1 كل
+          يوم جديد)
         </p>
         <PublicRegisterForm />
       </section>

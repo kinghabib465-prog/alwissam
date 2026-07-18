@@ -75,7 +75,20 @@ export default async function SecretaryDashboardPage({
   const { start, end } = algiersDayBounds();
   const today = algiersWeekday();
 
-  const weekAgo = new Date(start.getTime() - 7 * 24 * 60 * 60 * 1000);
+  // أي طلب استقبال غير موجّه من أيام سابقة يُغلق — التسجيل يومي فقط
+  await prisma.appointmentRequest.updateMany({
+    where: {
+      appointmentId: null,
+      createdAt: { lt: start },
+      status: {
+        in: ["NEW_REQUEST", "EMERGENCY", "UNDER_SECRETARY_REVIEW"],
+      },
+    },
+    data: {
+      status: "CANCELLED_BY_CLINIC",
+      secretaryNotes: "أُغلق تلقائياً — انتهى يوم التسجيل",
+    },
+  });
 
   const [waiting, todayPending, doctors, directed, payments, rejected] =
     await Promise.all([
@@ -85,11 +98,10 @@ export default async function SecretaryDashboardPage({
           status: {
             in: ["NEW_REQUEST", "EMERGENCY", "UNDER_SECRETARY_REVIEW"],
           },
-          // اليوم + أي طلب غير موجه من آخر 7 أيام (لا يختفي بين النوبتين/الأيام)
-          createdAt: { gte: weekAgo },
+          createdAt: { gte: start, lt: end },
         },
         orderBy: { createdAt: "asc" },
-        take: 150,
+        take: 100,
       }),
       listSecretaryTodayPendingCheckIns(),
       loadSecretaryDoctorsForDay(today),

@@ -197,6 +197,21 @@ export async function createAppointmentRequest(input: {
 
   const { ymd, start, end } = algiersDayBounds();
 
+  // إغلاق طلبات الأيام السابقة غير الموجّهة — كل يوم تسجيل مستقل
+  await prisma.appointmentRequest.updateMany({
+    where: {
+      appointmentId: null,
+      createdAt: { lt: start },
+      status: {
+        in: ["NEW_REQUEST", "EMERGENCY", "UNDER_SECRETARY_REVIEW"],
+      },
+    },
+    data: {
+      status: "CANCELLED_BY_CLINIC",
+      secretaryNotes: "أُغلق تلقائياً — انتهى يوم التسجيل",
+    },
+  });
+
   const phoneTrim = input.phone?.trim() || "";
   if (phoneTrim.length >= 8) {
     const duplicate = await prisma.appointmentRequest.findFirst({
