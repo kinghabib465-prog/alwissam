@@ -173,6 +173,10 @@ export const navDoctorSpecialistAr = [
         href: "/doctor/specialist/settings/doctors",
         label: "عرض الأطباء",
       },
+      {
+        href: "/doctor/specialist/settings/day-records",
+        label: "تنظيف سجل يوم (منانة فقط)",
+      },
     ],
   },
 ];
