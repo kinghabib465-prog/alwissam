@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { prisma } from "@/lib/db/prisma";
-import { isSalaryDayDue } from "@/lib/secretary-salary";
+import { isSalaryReminderActive } from "@/lib/secretary-salary";
 
 /** إشعارات يوم راتب السكرتارية — لمنانة/الأدمن */
 export async function GET() {
@@ -19,7 +19,9 @@ export async function GET() {
   });
 
   const due = secretaries
-    .filter((s) => isSalaryDayDue(s.salaryDayOfMonth))
+    .filter((s) =>
+      isSalaryReminderActive(s.salaryDayOfMonth, s.salaryPaidYearMonth),
+    )
     .map((s) => ({
       id: s.id,
       userId: s.userId,

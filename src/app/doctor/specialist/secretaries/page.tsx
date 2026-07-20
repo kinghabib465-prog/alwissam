@@ -6,7 +6,7 @@ import { navDoctorSpecialistAr } from "@/i18n/ar";
 import { CreateSecretaryForm } from "@/components/forms/CreateSecretaryForm";
 import { DeleteSecretaryButton } from "@/components/forms/DeleteSecretaryButton";
 import { SecretaryHoursBar } from "@/components/forms/SecretaryHoursBar";
-import { isSalaryDayDue } from "@/lib/secretary-salary";
+import { isSalaryReminderActive } from "@/lib/secretary-salary";
 import { toLatinDigits } from "@/lib/latin-digits";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ export default async function SpecialistSecretariesPage() {
   });
 
   const dueToday = secretaries.filter((s) =>
-    isSalaryDayDue(s.salaryDayOfMonth),
+    isSalaryReminderActive(s.salaryDayOfMonth, s.salaryPaidYearMonth),
   );
 
   return (
@@ -55,7 +55,8 @@ export default async function SpecialistSecretariesPage() {
             {dueToday.map((s) => (
               <li key={s.id}>
                 {s.user.fullName} — يوم{" "}
-                {toLatinDigits(s.salaryDayOfMonth || 0)} من كل شهر
+                {toLatinDigits(s.salaryDayOfMonth || 0)} من كل شهر — اضغطي «تم
+                الدفع» بجانب اسمه لإيقاف الإشعار
               </li>
             ))}
           </ul>
@@ -77,7 +78,10 @@ export default async function SpecialistSecretariesPage() {
           ) : (
             <div className="space-y-3">
               {secretaries.map((sec) => {
-                const due = isSalaryDayDue(sec.salaryDayOfMonth);
+                const due = isSalaryReminderActive(
+                  sec.salaryDayOfMonth,
+                  sec.salaryPaidYearMonth,
+                );
                 return (
                   <div
                     key={sec.id}

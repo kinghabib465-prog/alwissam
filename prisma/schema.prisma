@@ -391,6 +391,8 @@ model SecretaryProfile {
   workDays       String   @default("SUN,MON,TUE,WED,THU,SAT")
   /// يوم الشهر لدفع الراتب (1–31). null = غير محدد
   salaryDayOfMonth Int?
+  /// آخر شهر سُجّل فيه «تم الدفع» بصيغة YYYY-MM (توقيت الجزائر)
+  salaryPaidYearMonth String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }

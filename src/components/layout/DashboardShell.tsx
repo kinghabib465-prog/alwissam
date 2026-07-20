@@ -195,10 +195,13 @@ export function AppSidebar({
       }
     }
     load();
-    const id = window.setInterval(load, 60_000);
+    const id = window.setInterval(load, 30_000);
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
     return () => {
       cancelled = true;
       window.clearInterval(id);
+      window.removeEventListener("focus", onFocus);
     };
   }, []);
 

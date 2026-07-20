@@ -244,6 +244,35 @@ export function SecretaryHoursBar({
     }
   }
 
+  async function markSalaryPaid() {
+    setLoading(true);
+    setMsg("");
+    try {
+      const res = await fetch("/api/admin/secretaries", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken,
+        },
+        body: JSON.stringify({
+          section: "salary_paid",
+          userId,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMsg(data.error || "تعذر تسجيل الدفع");
+        return;
+      }
+      setMsg("تم تسجيل الدفع — توقّف الإشعار لهذا الشهر");
+      router.refresh();
+    } catch {
+      setMsg("تعذر الاتصال");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function toggleDay(code: string) {
     setMsg("");
     setDays((cur) =>
@@ -297,6 +326,16 @@ export function SecretaryHoursBar({
             {salaryDueToday ? "راتب اليوم! " : "راتب: "}
             يوم {toLatinDigits(salaryDayOfMonth)}
           </span>
+        )}
+        {salaryDueToday && (
+          <Button
+            size="sm"
+            variant="teal"
+            loading={loading}
+            onClick={markSalaryPaid}
+          >
+            تم الدفع
+          </Button>
         )}
         {salaryDueToday && (
           <span

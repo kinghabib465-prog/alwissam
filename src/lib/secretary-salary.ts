@@ -11,6 +11,11 @@ export function algiersTodayParts(now = new Date()) {
   return { year: get("year"), month: get("month"), day: get("day") };
 }
 
+export function algiersYearMonth(now = new Date()): string {
+  const { year, month } = algiersTodayParts(now);
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
 export function daysInMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
@@ -32,6 +37,17 @@ export function isSalaryDayDue(
   const dim = daysInMonth(year, month);
   const dueDay = Math.min(Math.floor(salaryDayOfMonth), dim);
   return day === dueDay;
+}
+
+/** يظهر الإشعار فقط إن حان يوم الراتب ولم يُضغط «تم الدفع» لهذا الشهر */
+export function isSalaryReminderActive(
+  salaryDayOfMonth: number | null | undefined,
+  salaryPaidYearMonth: string | null | undefined,
+  now = new Date(),
+): boolean {
+  if (!isSalaryDayDue(salaryDayOfMonth, now)) return false;
+  const ym = algiersYearMonth(now);
+  return salaryPaidYearMonth !== ym;
 }
 
 export function normalizeSalaryDay(raw: unknown): number | null {

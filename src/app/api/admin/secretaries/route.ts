@@ -280,6 +280,25 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true, salaryDayOfMonth });
   }
 
+  if (section === "salary_paid") {
+    const { algiersYearMonth } = await import("@/lib/secretary-salary");
+    const ym = algiersYearMonth();
+    await prisma.secretaryProfile.update({
+      where: { userId },
+      data: { salaryPaidYearMonth: ym },
+    });
+    await createAuditLog({
+      userId: user.id,
+      roleCode: user.role.code,
+      action: "SECRETARY_SALARY_MARKED_PAID",
+      entityType: "SecretaryProfile",
+      entityId: target.secretary.id,
+      newValue: { salaryPaidYearMonth: ym },
+      reason: `تم دفع راتب ${target.fullName} لشهر ${ym} بواسطة ${user.fullName}`,
+    });
+    return NextResponse.json({ ok: true, salaryPaidYearMonth: ym });
+  }
+
   return NextResponse.json({ error: "قسم غير معروف" }, { status: 400 });
 }
 
