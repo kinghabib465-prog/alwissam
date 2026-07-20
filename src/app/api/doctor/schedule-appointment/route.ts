@@ -123,14 +123,36 @@ export async function POST(req: NextRequest) {
   );
   const examReason = String(body.examReason || "").trim();
   const customReason = String(body.customReason || "").trim();
+  const visitReason = String(body.visitReason || "").trim();
+  const workPerformed = String(body.workPerformed || "").trim();
+  const followUpNote = String(body.followUpNote || "").trim();
+  const treatmentFinished = !!body.treatmentFinished;
   const forDoctorId = String(body.forDoctorId || "");
   const durationMinutes = Math.min(
     180,
     Math.max(15, Number(body.durationMinutes) || 30),
   );
 
-  if (!patientId || !dateStr) {
-    return NextResponse.json({ error: "المريض والتاريخ مطلوبان" }, { status: 400 });
+  if (!patientId) {
+    return NextResponse.json({ error: "المريض مطلوب" }, { status: 400 });
+  }
+  if (!treatmentFinished && !dateStr) {
+    return NextResponse.json(
+      { error: "المريض والتاريخ مطلوبان — أو حدّد انتهاء العلاج" },
+      { status: 400 },
+    );
+  }
+  if (workPerformed && workPerformed.length < 2) {
+    return NextResponse.json(
+      { error: "اكتب ما تم عمله (حرفان على الأقل)" },
+      { status: 400 },
+    );
+  }
+  if (!treatmentFinished && followUpNote && followUpNote.length < 2) {
+    return NextResponse.json(
+      { error: "ملاحظة الموعد القادم قصيرة جداً" },
+      { status: 400 },
+    );
   }
 
   const selfDoctor = await prisma.doctor.findFirst({
@@ -171,13 +193,84 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: typeError }, { status: 403 });
   }
 
-  const reasonError = validateDoctorAppointmentReason(
-    appointmentType,
-    examReason,
-    customReason,
-  );
+  const reasonError = treatmentFinished
+    ? null
+    : validateDoctorAppointmentReason(
+        appointmentType,
+        examReason,
+        customReason,
+      );
   if (reasonError) {
     return NextResponse.json({ error: reasonError }, { status: 400 });
+  }
+
+  /** تحديث آخر جلسة معاينة بتفاصيل ما تم عمله */
+  async function stampLastSessionDetails(
+    tx: Omit<typeof prisma, "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends">,
+  ) {
+    if (!visitReason && !workPerformed && !followUpNote && !treatmentFinished) {
+      return null;
+    }
+    const lastSession = await tx.appointment.findFirst({
+      where: {
+        patientId,
+        doctorId: doctor!.id,
+        deletedAt: null,
+        status: {
+          in: [
+            "IN_TREATMENT",
+            "FOLLOW_UP_REQUIRED",
+            "COMPLETED",
+          ],
+        },
+      },
+      orderBy: { startAt: "desc" },
+    });
+    if (!lastSession) return null;
+    return tx.appointment.update({
+      where: { id: lastSession.id },
+      data: {
+        ...(visitReason ? { visitReason } : {}),
+        ...(workPerformed ? { workPerformed } : {}),
+        ...(followUpNote ? { followUpNote } : {}),
+        treatmentFinished,
+      },
+    });
+  }
+
+  const visitDetailFields = {
+    ...(visitReason ? { visitReason } : {}),
+    ...(workPerformed ? { workPerformed } : {}),
+    ...(followUpNote ? { followUpNote } : {}),
+  };
+
+  if (treatmentFinished) {
+    const stamped = await prisma.$transaction(async (tx) => {
+      return stampLastSessionDetails(tx);
+    });
+    if (!stamped) {
+      return NextResponse.json(
+        {
+          error:
+            "لا توجد جلسة حديثة لتسجيل انتهاء العلاج — أكمل المعاينة أولاً أو اختر موعداً قادماً",
+        },
+        { status: 400 },
+      );
+    }
+    await createAuditLog({
+      userId: user.id,
+      roleCode: user.role.code,
+      action: "TREATMENT_MARKED_FINISHED",
+      entityType: "Appointment",
+      entityId: stamped.id,
+      newValue: { visitReason, workPerformed, treatmentFinished: true },
+      reason: `انتهاء علاج المريض ${patient.fullName}`,
+    });
+    return NextResponse.json({
+      ok: true,
+      finished: true,
+      appointment: { id: stamped.id },
+    });
   }
 
   const bounds = await dayAppointmentBounds(
@@ -241,6 +334,7 @@ export async function POST(req: NextRequest) {
     });
 
     const appointment = await prisma.$transaction(async (tx) => {
+      const stamped = await stampLastSessionDetails(tx);
       for (const o of others) {
         await tx.appointment.update({
           where: { id: o.id },
@@ -269,6 +363,8 @@ export async function POST(req: NextRequest) {
           endAt,
           durationMinutes,
           notes: noteLine,
+          // إن لم تُحدَّث جلسة سابقة، احفظ التفاصيل على الموعد نفسه
+          ...(!stamped ? visitDetailFields : {}),
           statusHistory: {
             create: {
               previousStatus: existingSameDay.status,
@@ -302,6 +398,9 @@ export async function POST(req: NextRequest) {
         startAt: startAt.toISOString(),
         shift,
         mergedDuplicates: others.length,
+        visitReason,
+        workPerformed,
+        followUpNote,
       },
       reason: `موعد واحد ليوم ${dateStr} — عُدّل بدل إنشاء جديد`,
     });
@@ -317,26 +416,30 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const appointment = await prisma.appointment.create({
-    data: {
-      appointmentNumber: generateNumber("APT"),
-      patientId,
-      doctorId: doctor.id,
-      appointmentType,
-      status: "CONFIRMED",
-      startAt,
-      endAt,
-      durationMinutes,
-      notes: noteLine,
-      createdById: user.id,
-      statusHistory: {
-        create: {
-          newStatus: "CONFIRMED",
-          changedById: user.id,
-          reason: `تحديد موعد (${SHIFT_LABEL_AR[shift]}) بواسطة ${user.fullName}`,
+  const appointment = await prisma.$transaction(async (tx) => {
+    const stamped = await stampLastSessionDetails(tx);
+    return tx.appointment.create({
+      data: {
+        appointmentNumber: generateNumber("APT"),
+        patientId,
+        doctorId: doctor.id,
+        appointmentType,
+        status: "CONFIRMED",
+        startAt,
+        endAt,
+        durationMinutes,
+        notes: noteLine,
+        ...(!stamped ? visitDetailFields : {}),
+        createdById: user.id,
+        statusHistory: {
+          create: {
+            newStatus: "CONFIRMED",
+            changedById: user.id,
+            reason: `تحديد موعد (${SHIFT_LABEL_AR[shift]}) بواسطة ${user.fullName}`,
+          },
         },
       },
-    },
+    });
   });
 
   await prisma.orthodonticCase.updateMany({
@@ -361,6 +464,9 @@ export async function POST(req: NextRequest) {
       appointmentType,
       shift,
       dayOnly: true,
+      visitReason,
+      workPerformed,
+      followUpNote,
     },
     reason: `تحديد موعد للمريض ${patient.fullName}`,
   });

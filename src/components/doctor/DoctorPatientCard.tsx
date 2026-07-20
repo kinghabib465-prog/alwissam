@@ -132,6 +132,10 @@ export function DoctorPatientCard({
     parseExamReasonFromNotes(patient.lastNote),
   );
   const [customReason, setCustomReason] = useState("");
+  const [visitReason, setVisitReason] = useState(patient.visitReason || "");
+  const [workPerformed, setWorkPerformed] = useState("");
+  const [followUpNote, setFollowUpNote] = useState("");
+  const [treatmentFinished, setTreatmentFinished] = useState(false);
 
   const defaultDate = useMemo(() => {
     if (!availability) return "";
@@ -186,24 +190,30 @@ export function DoctorPatientCard({
   }
 
   async function saveSchedule(_editExisting?: boolean) {
-    if (!selectedDate) {
+    if (!treatmentFinished && !selectedDate) {
       setError("اختر يوم موعد من أيام عملك");
       return;
     }
-    if (availability) {
+    if (!treatmentFinished && availability) {
       const shifts = shiftsForDate(selectedDate, availability.windowsByDay);
       if (shifts.length > 0 && !shifts.includes(selectedShift)) {
         setError("اختر فترة متاحة (صباح أو مساء)");
         return;
       }
     }
-    const reasonError = validateDoctorAppointmentReason(
-      apptType,
-      examReason,
-      customReason,
-    );
-    if (reasonError) {
-      setError(reasonError);
+    if (!treatmentFinished) {
+      const reasonError = validateDoctorAppointmentReason(
+        apptType,
+        examReason,
+        customReason,
+      );
+      if (reasonError) {
+        setError(reasonError);
+        return;
+      }
+    }
+    if (workPerformed.trim() && workPerformed.trim().length < 2) {
+      setError("اكتب ما تم عمله بوضوح");
       return;
     }
     // دائماً POST — السيرفر يحدّث موعد نفس اليوم بدل إنشاء مكرر
@@ -212,19 +222,30 @@ export function DoctorPatientCard({
       "POST",
       {
         patientId: patient.id,
-        date: selectedDate,
+        date: treatmentFinished ? undefined : selectedDate,
         appointmentType: apptType,
         shift: selectedShift,
         examReason: apptType === "GENERAL_EXAM" ? examReason : undefined,
         customReason: apptType === "OTHER" ? customReason : undefined,
+        visitReason: visitReason.trim() || undefined,
+        workPerformed: workPerformed.trim() || undefined,
+        followUpNote: treatmentFinished
+          ? undefined
+          : followUpNote.trim() || undefined,
+        treatmentFinished,
       },
     );
     if (!data) return;
     setOk(
-      data.updated
-        ? "تم تحديث الموعد لنفس اليوم (بدون تكرار)"
-        : `تم حجز الموعد (${selectedShift === "EVENING" ? "مساء" : selectedShift === "DAY" ? "اليوم" : "صباح"})`,
+      data.finished
+        ? "تم تسجيل انتهاء العلاج — لا موعد قادم"
+        : data.updated
+          ? "تم تحديث الموعد لنفس اليوم (بدون تكرار)"
+          : `تم حجز الموعد (${selectedShift === "EVENING" ? "مساء" : selectedShift === "DAY" ? "اليوم" : "صباح"})`,
     );
+    setWorkPerformed("");
+    setFollowUpNote("");
+    setTreatmentFinished(false);
     router.refresh();
   }
 
@@ -665,70 +686,100 @@ export function DoctorPatientCard({
             {tab === "schedule" && canManage && (
               <div className="space-y-3">
                 <p className="text-sm text-muted">
-                  حجز يوم + صباح/مساء — موعد واحد للمريض في اليوم. أي حفظ لاحق
-                  يعدّل نفس الموعد ولا ينشئ موعداً جديداً. يظهر للسكرتارية يوم
-                  الموعد فقط (بدون فتح حساب).
+                  بعد المعاينة: سجّلي ما تم عمله واحذري الموعد القادم. يظهر
+                  المرضى ذوو المواعيد في قائمة «المرضى الذين لديهم موعد».
                 </p>
-                {!isClinicOwner && (
-                  <p className="text-xs text-muted">
-                    كطبيب عام: يمكنك حجز <strong>فحص</strong> أو كتابة سبب مخصّص
-                    تحت <strong>أخرى</strong> فقط — التقويم والعمليات لصاحبة
-                    العيادة.
-                  </p>
-                )}
-                {availability && availability.workDays.length > 0 ? (
-                  <AppointmentDatePicker
-                    availability={availability}
-                    date={selectedDate || defaultDate}
-                    shift={selectedShift}
-                    onDateChange={setSelectedDate}
-                    onShiftChange={setSelectedShift}
-                    dayOnly
+                <FormField label="سبب الزيارة">
+                  <Input
+                    value={visitReason}
+                    onChange={(e) => setVisitReason(e.target.value)}
+                    placeholder="مثال: ألم في الضرس رقم 36"
                   />
-                ) : (
-                  <p className="text-sm text-danger">
-                    حدّد أيام عملك من الإعدادات أولاً
-                  </p>
-                )}
-                <div className="flex flex-wrap gap-2">
-                  {appointmentTypeOptions.map(({ value, label }) => (
-                    <Button
-                      key={value}
-                      size="sm"
-                      variant={apptType === value ? "teal" : "outline"}
-                      onClick={() => setApptType(value)}
-                    >
-                      {label}
-                    </Button>
-                  ))}
-                </div>
-                {apptType === "GENERAL_EXAM" && (
-                  <FormField label="سبب الفحص *">
-                    <Input
-                      value={examReason}
-                      onChange={(e) => setExamReason(e.target.value)}
-                      placeholder="مثال: ألم في الضرس السفلي، فحص دوري..."
-                    />
-                  </FormField>
-                )}
-                {apptType === "OTHER" && (
-                  <FormField label="سبب الموعد *">
-                    <Input
-                      value={customReason}
-                      onChange={(e) => setCustomReason(e.target.value)}
-                      placeholder="اكتب سبب الزيارة..."
-                    />
-                  </FormField>
+                </FormField>
+                <FormField label="ما تم عمله">
+                  <Input
+                    value={workPerformed}
+                    onChange={(e) => setWorkPerformed(e.target.value)}
+                    placeholder="مثال: فحص سريري، تنظيف تسوس، دواء مؤقت"
+                  />
+                </FormField>
+                <label className="flex items-center gap-2 text-sm text-navy">
+                  <input
+                    type="checkbox"
+                    checked={treatmentFinished}
+                    onChange={(e) => setTreatmentFinished(e.target.checked)}
+                    className="h-4 w-4 accent-teal"
+                  />
+                  انتهى العلاج — لا موعد قادم
+                </label>
+                {!treatmentFinished && (
+                  <>
+                    <FormField label="ملاحظة الموعد القادم">
+                      <Input
+                        value={followUpNote}
+                        onChange={(e) => setFollowUpNote(e.target.value)}
+                        placeholder="مثال: إزالة الدواء المؤقت وبدء علاج العصب"
+                      />
+                    </FormField>
+                    {availability && availability.workDays.length > 0 ? (
+                      <AppointmentDatePicker
+                        availability={availability}
+                        date={selectedDate || defaultDate}
+                        shift={selectedShift}
+                        onDateChange={setSelectedDate}
+                        onShiftChange={setSelectedShift}
+                        dayOnly
+                      />
+                    ) : (
+                      <p className="text-sm text-danger">
+                        حدّد أيام عملك من الإعدادات أولاً
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {appointmentTypeOptions.map(({ value, label }) => (
+                        <Button
+                          key={value}
+                          size="sm"
+                          variant={apptType === value ? "teal" : "outline"}
+                          onClick={() => setApptType(value)}
+                        >
+                          {label}
+                        </Button>
+                      ))}
+                    </div>
+                    {apptType === "GENERAL_EXAM" && (
+                      <FormField label="سبب الفحص *">
+                        <Input
+                          value={examReason}
+                          onChange={(e) => setExamReason(e.target.value)}
+                          placeholder="مثال: ألم في الضرس السفلي، فحص دوري..."
+                        />
+                      </FormField>
+                    )}
+                    {apptType === "OTHER" && (
+                      <FormField label="سبب الموعد *">
+                        <Input
+                          value={customReason}
+                          onChange={(e) => setCustomReason(e.target.value)}
+                          placeholder="اكتب سبب الزيارة..."
+                        />
+                      </FormField>
+                    )}
+                  </>
                 )}
                 <div className="flex flex-wrap gap-2">
                   <Button
                     size="sm"
                     variant="teal"
                     loading={loading}
-                    disabled={!availability?.workDays.length}
+                    disabled={
+                      !treatmentFinished && !availability?.workDays.length
+                    }
                     onClick={() => saveSchedule()}
                   >
-                    حفظ الموعد
+                    {treatmentFinished
+                      ? "تسجيل انتهاء العلاج"
+                      : "حفظ الموعد والتفاصيل"}
                   </Button>
                   {isClinicOwner && patient.nextAppointmentId && (
                     <Button

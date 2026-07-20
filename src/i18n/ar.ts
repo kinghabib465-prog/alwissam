@@ -150,6 +150,11 @@ export const navDoctorSpecialistAr = [
     icon: "Activity",
   },
   { href: "/doctor/specialist/patients", label: "مرضاي", icon: "UserRound" },
+  {
+    href: "/doctor/specialist/scheduled-patients",
+    label: "المرضى الذين لديهم موعد",
+    icon: "CalendarDays",
+  },
   { href: "/doctor/specialist/doctors", label: "الأطباء", icon: "Stethoscope" },
   { href: "/doctor/specialist/secretaries", label: "السكرتارية", icon: "UserCog" },
   {

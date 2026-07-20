@@ -521,6 +521,14 @@ model Appointment {
   isEmergency     Boolean           @default(false)
   room            String?
   notes           String?
+  /** سبب الزيارة لهذه الجلسة (يُدخلها الطبيب عند حجز الموعد بعد المعاينة) */
+  visitReason     String?
+  /** ما تم عمله في الجلسة */
+  workPerformed   String?
+  /** ملاحظة للموعد القادم */
+  followUpNote    String?
+  /** انتهى العلاج — لا موعد قادم */
+  treatmentFinished Boolean @default(false)
   recurrenceGroupId String?
   recurrenceFrequency RecurrenceFrequency?
   recurrenceParentId String?
