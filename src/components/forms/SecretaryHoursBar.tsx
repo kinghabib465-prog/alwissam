@@ -108,6 +108,7 @@ export function SecretaryHoursBar({
   workEndTime,
   workDays,
   salaryDayOfMonth,
+  salaryDueToday,
   csrfToken,
   status,
   onDelete,
@@ -121,6 +122,7 @@ export function SecretaryHoursBar({
   workEndTime: string;
   workDays?: string;
   salaryDayOfMonth?: number | null;
+  salaryDueToday?: boolean;
   csrfToken: string;
   status?: string;
   onDelete?: React.ReactNode;
@@ -285,9 +287,23 @@ export function SecretaryHoursBar({
           {workDaysLabel(days.join(","))}
         </span>
         {salaryDayOfMonth != null && (
-          <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900">
-            راتب: يوم {toLatinDigits(salaryDayOfMonth)}
+          <span
+            className={
+              salaryDueToday
+                ? "rounded-full bg-red-600 px-2.5 py-1 text-xs font-bold text-white"
+                : "rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900"
+            }
+          >
+            {salaryDueToday ? "راتب اليوم! " : "راتب: "}
+            يوم {toLatinDigits(salaryDayOfMonth)}
           </span>
+        )}
+        {salaryDueToday && (
+          <span
+            className="flex h-3 w-3 shrink-0 rounded-full bg-red-500 ring-2 ring-white"
+            title="موعد دفع الراتب اليوم"
+            aria-label="موعد دفع الراتب اليوم"
+          />
         )}
         <Button size="sm" variant="teal" onClick={() => setHoursOpen((v) => !v)}>
           أوقات العمل

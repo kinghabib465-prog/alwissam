@@ -69,6 +69,8 @@ export type SidebarItem = {
   label: string;
   icon: keyof typeof ICONS;
   children?: { href: string; label: string }[];
+  /** عدد الإشعارات — نقطة حمراء على الرابط */
+  badgeCount?: number;
 };
 
 function NavLink({
@@ -76,22 +78,25 @@ function NavLink({
   label,
   icon,
   nested,
+  badgeCount,
 }: {
   href: string;
   label: string;
   icon?: keyof typeof ICONS;
   nested?: boolean;
+  badgeCount?: number;
 }) {
   const pathname = usePathname();
   const Icon = icon ? ICONS[icon] || LayoutDashboard : null;
   const active =
     pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
+  const showBadge = (badgeCount || 0) > 0;
 
   return (
     <Link
       href={href}
       className={cn(
-        "flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition",
+        "relative flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition",
         nested && "py-2 pr-4 text-[13px]",
         active
           ? "bg-white/15 text-white"
@@ -99,7 +104,16 @@ function NavLink({
       )}
     >
       {Icon && <Icon className="h-4.5 w-4.5 shrink-0" />}
-      {label}
+      <span className="flex-1 text-right">{label}</span>
+      {showBadge && (
+        <span
+          className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white shadow ring-2 ring-navy"
+          title="إشعار راتب"
+          aria-label={`${badgeCount} إشعار راتب`}
+        >
+          {badgeCount! > 9 ? "9+" : badgeCount}
+        </span>
+      )}
     </Link>
   );
 }
@@ -164,13 +178,43 @@ export function AppSidebar({
   userName: string;
   onLogout?: () => void;
 }) {
+  const [salaryDueCount, setSalaryDueCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/doctor/salary-reminders", {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setSalaryDueCount(Number(data.dueCount) || 0);
+      } catch {
+        /* تجاهل — الشارة اختيارية */
+      }
+    }
+    load();
+    const id = window.setInterval(load, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
+
+  const navItems = items.map((item) =>
+    item.href === "/doctor/specialist/secretaries"
+      ? { ...item, badgeCount: salaryDueCount }
+      : item,
+  );
+
   return (
     <aside className="fixed inset-y-0 right-0 z-40 hidden w-64 flex-col bg-navy text-white lg:flex">
       <div className="border-b border-white/10 px-5 py-5">
         <ClinicLogo light href={items[0]?.href || "/"} />
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {items.map((item) =>
+        {navItems.map((item) =>
           item.children?.length ? (
             <NavGroup key={item.href} item={item} />
           ) : (
@@ -179,6 +223,7 @@ export function AppSidebar({
               href={item.href}
               label={item.label}
               icon={item.icon}
+              badgeCount={item.badgeCount}
             />
           ),
         )}
