@@ -252,6 +252,14 @@ export async function POST(req: NextRequest) {
     ...(followUpNote ? { followUpNote } : {}),
   };
 
+  /** على الموعد القادم: الملاحظة فقط إن وُجدت جلسة سابقة — وإلا كل التفاصيل */
+  function upcomingDetailFields(stamped: boolean) {
+    if (stamped) {
+      return followUpNote ? { followUpNote } : {};
+    }
+    return visitDetailFields;
+  }
+
   if (treatmentFinished) {
     const stamped = await prisma.$transaction(async (tx) => {
       return stampLastSessionDetails(tx);
@@ -342,7 +350,7 @@ export async function POST(req: NextRequest) {
     });
 
     const appointment = await prisma.$transaction(async (tx) => {
-      await stampLastSessionDetails(tx);
+      const stamped = await stampLastSessionDetails(tx);
       for (const o of others) {
         await tx.appointment.update({
           where: { id: o.id },
@@ -371,8 +379,12 @@ export async function POST(req: NextRequest) {
           endAt,
           durationMinutes,
           notes: noteLine,
-          // دائماً على الموعد القادم — للظهور الفوري في البطاقات
-          ...visitDetailFields,
+          // لا تكرار للتفاصيل إن وُجدت على الجلسة السابقة
+          ...upcomingDetailFields(!!stamped),
+          // إن وُجدت تفاصيل قديمة مكررة على الموعد القادم امسحها عند وجود جلسة سابقة
+          ...(stamped
+            ? { visitReason: null, workPerformed: null }
+            : {}),
           statusHistory: {
             create: {
               previousStatus: existingSameDay.status,
@@ -425,7 +437,7 @@ export async function POST(req: NextRequest) {
   }
 
   const appointment = await prisma.$transaction(async (tx) => {
-    await stampLastSessionDetails(tx);
+    const stamped = await stampLastSessionDetails(tx);
     return tx.appointment.create({
       data: {
         appointmentNumber: generateNumber("APT"),
@@ -437,7 +449,7 @@ export async function POST(req: NextRequest) {
         endAt,
         durationMinutes,
         notes: noteLine,
-        ...visitDetailFields,
+        ...upcomingDetailFields(!!stamped),
         createdById: user.id,
         statusHistory: {
           create: {

@@ -64,15 +64,22 @@ function isSessionDoneStatus(status: string) {
   return SESSION_DONE.includes(status as (typeof SESSION_DONE)[number]);
 }
 
+function hasVisitDetails(a: {
+  workPerformed: string | null;
+  visitReason: string | null;
+  treatmentFinished: boolean;
+}) {
+  return !!(a.workPerformed || a.visitReason || a.treatmentFinished);
+}
+
 /**
- * مرضى لديهم موعد (اليوم أو لاحقاً) عند هذا الطبيب — بطاقات الجلسات كالصورة.
+ * مرضى لديهم موعد — بطاقة واحدة لكل جلسة موثّقة (بدون تكرار الموعد القادم).
  */
 export async function loadScheduledPatientsWithVisits(
   doctorId: string,
 ): Promise<ScheduledPatientGroup[]> {
   const { start: todayStart } = algiersYmdBounds(todayAlgiersYmd());
 
-  // موعد «اليوم» يبقى ظاهراً حتى لو انطلقت ساعة بداية الفترة (صباح/مساء)
   const upcoming = await prisma.appointment.findMany({
     where: {
       doctorId,
@@ -116,38 +123,48 @@ export async function loadScheduledPatientsWithVisits(
         .filter((a) => isUpcomingStatus(a.status) && a.startAt >= todayStart)
         .sort((a, b) => a.startAt.getTime() - b.startAt.getTime())[0] || null;
 
-    const sessionCards = apts.filter(
-      (a) =>
-        a.treatmentFinished ||
-        !!a.workPerformed ||
-        !!a.visitReason ||
-        isSessionDoneStatus(a.status),
+    // جلسات موثّقة فقط (ما تم / سبب / انتهاء) — ليست كل مواعيد SESSION_DONE الفارغة
+    const documentedPast = apts.filter(
+      (a) => hasVisitDetails(a) && !isUpcomingStatus(a.status),
     );
 
-    const cards: VisitTimelineCard[] = [];
+    // موعد قادم موثّق يُستخدم كبطاقة فقط إن لم توجد جلسة سابقة موثّقة
+    // (يمنع ظهور نفس الحجز مرتين أو ثلاثاً)
+    const documentedUpcoming =
+      documentedPast.length === 0
+        ? apts.filter(
+            (a) =>
+              isUpcomingStatus(a.status) &&
+              a.startAt >= todayStart &&
+              hasVisitDetails(a),
+          )
+        : [];
 
-    for (let i = 0; i < sessionCards.length; i++) {
-      const a = sessionCards[i]!;
-      const chronologicalNext =
-        apts.find(
-          (x) =>
-            x.id !== a.id &&
-            x.startAt.getTime() > a.startAt.getTime() &&
-            (isUpcomingStatus(x.status) || isSessionDoneStatus(x.status)),
-        ) || null;
+    const sessionSources =
+      documentedPast.length > 0 ? documentedPast : documentedUpcoming;
 
-      const isFutureShell =
-        isUpcomingStatus(a.status) &&
-        a.startAt >= todayStart &&
-        (!!a.workPerformed || !!a.visitReason) &&
-        !isSessionDoneStatus(a.status);
+    // إزالة تكرار بنفس المحتوى (سبب + ما تم + نفس اليوم تقريباً)
+    const seen = new Set<string>();
+    const uniqueSessions = sessionSources.filter((a) => {
+      const key = [
+        a.visitReason || "",
+        a.workPerformed || "",
+        a.followUpNote || "",
+        a.treatmentFinished ? "1" : "0",
+        formatClinicAppointmentDay(a.startAt),
+      ].join("|");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 
-      // موعد قادم يحمل تفاصيل الجلسة (حجز مباشر بدون جلسة سابقة):
-      // الجانب الأيمن = ما تم / السبب، والأيسر = موعده نفسه
+    const cards: VisitTimelineCard[] = uniqueSessions.map((a, i) => {
+      const isFutureShell = isUpcomingStatus(a.status);
+
       if (isFutureShell) {
-        cards.push({
+        return {
           id: a.id,
-          index: cards.length + 1,
+          index: i + 1,
           dateLabel: formatClinicAppointmentDay(a.updatedAt || a.createdAt),
           timeLabel: formatClock(a.updatedAt || a.createdAt),
           patientName: p.fullName,
@@ -158,22 +175,24 @@ export async function loadScheduledPatientsWithVisits(
           nextDateLabel: formatClinicAppointmentDay(a.startAt),
           nextTimeLabel: formatClock(a.startAt),
           followUpNote: a.followUpNote,
-        });
-        continue;
+        };
       }
 
       const nextApt =
-        chronologicalNext && isUpcomingStatus(chronologicalNext.status)
-          ? chronologicalNext
-          : nextUpcoming && nextUpcoming.id !== a.id
-            ? nextUpcoming
-            : chronologicalNext;
+        nextUpcoming && nextUpcoming.id !== a.id
+          ? nextUpcoming
+          : apts.find(
+              (x) =>
+                x.id !== a.id &&
+                x.startAt.getTime() > a.startAt.getTime() &&
+                isUpcomingStatus(x.status),
+            ) || null;
 
-      const showNext = !a.treatmentFinished && !!nextApt && nextApt.id !== a.id;
+      const showNext = !a.treatmentFinished && !!nextApt;
 
-      cards.push({
+      return {
         id: a.id,
-        index: cards.length + 1,
+        index: i + 1,
         dateLabel: formatClinicAppointmentDay(a.startAt),
         timeLabel: formatClock(a.startAt),
         patientName: p.fullName,
@@ -192,10 +211,9 @@ export async function loadScheduledPatientsWithVisits(
         followUpNote: showNext
           ? a.followUpNote || nextApt!.followUpNote
           : a.followUpNote,
-      });
-    }
+      };
+    });
 
-    // موعد قادم فقط بدون تفاصيل بعد — بطاقة أساسية حتى يظهر المريض فوراً
     if (cards.length === 0 && nextUpcoming) {
       cards.push({
         id: nextUpcoming.id,
