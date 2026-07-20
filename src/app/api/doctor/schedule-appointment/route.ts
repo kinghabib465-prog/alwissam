@@ -142,15 +142,23 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+  if (!treatmentFinished) {
+    if (!visitReason || visitReason.length < 2) {
+      return NextResponse.json(
+        { error: "اكتب سبب الزيارة (حرفان على الأقل)" },
+        { status: 400 },
+      );
+    }
+    if (!workPerformed || workPerformed.length < 2) {
+      return NextResponse.json(
+        { error: "اكتب ما تم عمله (حرفان على الأقل)" },
+        { status: 400 },
+      );
+    }
+  }
   if (workPerformed && workPerformed.length < 2) {
     return NextResponse.json(
       { error: "اكتب ما تم عمله (حرفان على الأقل)" },
-      { status: 400 },
-    );
-  }
-  if (!treatmentFinished && followUpNote && followUpNote.length < 2) {
-    return NextResponse.json(
-      { error: "ملاحظة الموعد القادم قصيرة جداً" },
       { status: 400 },
     );
   }
@@ -334,7 +342,7 @@ export async function POST(req: NextRequest) {
     });
 
     const appointment = await prisma.$transaction(async (tx) => {
-      const stamped = await stampLastSessionDetails(tx);
+      await stampLastSessionDetails(tx);
       for (const o of others) {
         await tx.appointment.update({
           where: { id: o.id },
@@ -363,8 +371,8 @@ export async function POST(req: NextRequest) {
           endAt,
           durationMinutes,
           notes: noteLine,
-          // إن لم تُحدَّث جلسة سابقة، احفظ التفاصيل على الموعد نفسه
-          ...(!stamped ? visitDetailFields : {}),
+          // دائماً على الموعد القادم — للظهور الفوري في البطاقات
+          ...visitDetailFields,
           statusHistory: {
             create: {
               previousStatus: existingSameDay.status,
@@ -417,7 +425,7 @@ export async function POST(req: NextRequest) {
   }
 
   const appointment = await prisma.$transaction(async (tx) => {
-    const stamped = await stampLastSessionDetails(tx);
+    await stampLastSessionDetails(tx);
     return tx.appointment.create({
       data: {
         appointmentNumber: generateNumber("APT"),
@@ -429,7 +437,7 @@ export async function POST(req: NextRequest) {
         endAt,
         durationMinutes,
         notes: noteLine,
-        ...(!stamped ? visitDetailFields : {}),
+        ...visitDetailFields,
         createdById: user.id,
         statusHistory: {
           create: {

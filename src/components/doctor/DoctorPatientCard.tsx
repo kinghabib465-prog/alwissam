@@ -212,8 +212,12 @@ export function DoctorPatientCard({
         return;
       }
     }
-    if (workPerformed.trim() && workPerformed.trim().length < 2) {
-      setError("اكتب ما تم عمله بوضوح");
+    if (!treatmentFinished && visitReason.trim().length < 2) {
+      setError("اكتب سبب الزيارة");
+      return;
+    }
+    if (!treatmentFinished && workPerformed.trim().length < 2) {
+      setError("اكتب ما تم عمله");
       return;
     }
     // دائماً POST — السيرفر يحدّث موعد نفس اليوم بدل إنشاء مكرر
@@ -689,14 +693,14 @@ export function DoctorPatientCard({
                   بعد المعاينة: سجّلي ما تم عمله واحذري الموعد القادم. يظهر
                   المرضى ذوو المواعيد في قائمة «المرضى الذين لديهم موعد».
                 </p>
-                <FormField label="سبب الزيارة">
+                <FormField label="سبب الزيارة *">
                   <Input
                     value={visitReason}
                     onChange={(e) => setVisitReason(e.target.value)}
                     placeholder="مثال: ألم في الضرس رقم 36"
                   />
                 </FormField>
-                <FormField label="ما تم عمله">
+                <FormField label="ما تم عمله *">
                   <Input
                     value={workPerformed}
                     onChange={(e) => setWorkPerformed(e.target.value)}
