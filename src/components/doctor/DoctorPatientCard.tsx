@@ -217,7 +217,11 @@ export function DoctorPatientCard({
       return;
     }
     if (!treatmentFinished && workPerformed.trim().length < 2) {
-      setError("اكتب ما تم عمله");
+      setError("اكتب ما تم عمله في هذه المعاينة");
+      return;
+    }
+    if (!treatmentFinished && followUpNote.trim().length < 2) {
+      setError("اكتب ما ستفعلينه في الحصة القادمة");
       return;
     }
     // دائماً POST — السيرفر يحدّث موعد نفس اليوم بدل إنشاء مكرر
@@ -690,8 +694,8 @@ export function DoctorPatientCard({
             {tab === "schedule" && canManage && (
               <div className="space-y-3">
                 <p className="text-sm text-muted">
-                  بعد المعاينة: سجّلي ما تم عمله واحذري الموعد القادم. يظهر
-                  المرضى ذوو المواعيد في قائمة «المرضى الذين لديهم موعد».
+                  بعد المعاينة: سجّلي ما تم عمله، ثم احجزي الموعد القادم واكتبي ما
+                  ستفعلينه فيه. يظهر مرة واحدة في «المرضى الذين لديهم موعد».
                 </p>
                 <FormField label="سبب الزيارة *">
                   <Input
@@ -700,11 +704,11 @@ export function DoctorPatientCard({
                     placeholder="مثال: ألم في الضرس رقم 36"
                   />
                 </FormField>
-                <FormField label="ما تم عمله *">
+                <FormField label="ما تم عمله في هذه المعاينة *">
                   <Input
                     value={workPerformed}
                     onChange={(e) => setWorkPerformed(e.target.value)}
-                    placeholder="مثال: فحص سريري، تنظيف تسوس، دواء مؤقت"
+                    placeholder="مثال: نزع ضرس"
                   />
                 </FormField>
                 <label className="flex items-center gap-2 text-sm text-navy">
@@ -718,11 +722,11 @@ export function DoctorPatientCard({
                 </label>
                 {!treatmentFinished && (
                   <>
-                    <FormField label="ملاحظة الموعد القادم">
+                    <FormField label="ما سأفعله في الحصة القادمة *">
                       <Input
                         value={followUpNote}
                         onChange={(e) => setFollowUpNote(e.target.value)}
-                        placeholder="مثال: إزالة الدواء المؤقت وبدء علاج العصب"
+                        placeholder="مثال: خياطة / بدء علاج عصب / مراجعة"
                       />
                     </FormField>
                     {availability && availability.workDays.length > 0 ? (

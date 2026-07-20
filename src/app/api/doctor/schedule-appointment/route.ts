@@ -155,6 +155,12 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+    if (!followUpNote || followUpNote.length < 2) {
+      return NextResponse.json(
+        { error: "اكتب ما ستفعلينه في الحصة القادمة" },
+        { status: 400 },
+      );
+    }
   }
   if (workPerformed && workPerformed.length < 2) {
     return NextResponse.json(

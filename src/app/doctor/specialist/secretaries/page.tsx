@@ -6,6 +6,12 @@ import { navDoctorSpecialistAr } from "@/i18n/ar";
 import { CreateSecretaryForm } from "@/components/forms/CreateSecretaryForm";
 import { DeleteSecretaryButton } from "@/components/forms/DeleteSecretaryButton";
 import { SecretaryHoursBar } from "@/components/forms/SecretaryHoursBar";
+import { SecretarySalaryDayForm } from "@/components/doctor/SecretarySalaryDayForm";
+import {
+  isSecretarySalaryDueToday,
+  loadSecretarySalarySetting,
+} from "@/lib/secretary-salary";
+import { isClinicOwner } from "@/lib/auth/clinic-owner";
 
 export const dynamic = "force-dynamic";
 
@@ -15,13 +21,30 @@ export default async function SpecialistSecretariesPage() {
     include: { user: true },
     orderBy: { createdAt: "asc" },
   });
+  const salary = await loadSecretarySalarySetting();
+  const salaryDue = isSecretarySalaryDueToday(salary);
+  const canEditSalary = isClinicOwner(user);
 
   return (
     <DashboardShell items={navDoctorSpecialistAr as never} userName={user.fullName}>
       <TopHeader
         title="إدارة السكرتارية"
-        subtitle="تعديل الدخول · أوقات فتح الحساب (صباحي / مسائي)"
+        subtitle="تعديل الدخول · أوقات فتح الحساب · تذكير يوم الراتب"
       />
+
+      {salaryDue && (
+        <div
+          role="status"
+          className="mb-5 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm leading-7 text-amber-950"
+        >
+          <p className="font-bold">إشعار: اليوم موعد دفع راتب السكرتارية</p>
+          <p className="mt-1">
+            يوم الراتب المحدد: {salary.dayOfMonth} من كل شهر
+            {salary.note ? ` — ${salary.note}` : ""}
+          </p>
+        </div>
+      )}
+
       <div className="grid gap-5 lg:grid-cols-2">
         <Card>
           <h2 className="mb-3 font-bold text-navy">إضافة سكرتير</h2>
@@ -60,6 +83,12 @@ export default async function SpecialistSecretariesPage() {
             </div>
           )}
         </Card>
+        {canEditSalary && (
+          <Card className="lg:col-span-2">
+            <h2 className="mb-3 font-bold text-navy">تذكير يوم راتب السكرتارية</h2>
+            <SecretarySalaryDayForm csrfToken={user.csrfToken} initial={salary} />
+          </Card>
+        )}
       </div>
     </DashboardShell>
   );

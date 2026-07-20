@@ -20,7 +20,7 @@ export default async function ScheduledPatientsPage() {
     <DashboardShell items={navDoctorSpecialistAr as never} userName={user.fullName}>
       <TopHeader
         title="المرضى الذين لديهم موعد"
-        subtitle="تفاصيل الجلسات وما تم عمله والموعد القادم — كما سجّلتها بعد المعاينة"
+        subtitle="موعد قادم واحد لكل مريض — اضغط لرؤية ما تم في المعاينة وما ستفعلينه في الحصة القادمة"
       />
       <ScheduledPatientsBoard groups={groups} />
     </DashboardShell>
