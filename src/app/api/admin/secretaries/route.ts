@@ -246,6 +246,40 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  if (section === "salary_day") {
+    const { normalizeSalaryDay } = await import("@/lib/secretary-salary");
+    const salaryDayOfMonth = normalizeSalaryDay(body.salaryDayOfMonth);
+    if (
+      body.salaryDayOfMonth !== "" &&
+      body.salaryDayOfMonth != null &&
+      salaryDayOfMonth == null
+    ) {
+      return NextResponse.json(
+        { error: "يوم الراتب يجب أن يكون بين 1 و 31" },
+        { status: 400 },
+      );
+    }
+
+    await prisma.secretaryProfile.update({
+      where: { userId },
+      data: { salaryDayOfMonth },
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      roleCode: user.role.code,
+      action: "SECRETARY_SALARY_DAY_UPDATED",
+      entityType: "SecretaryProfile",
+      entityId: target.secretary.id,
+      oldValue: { salaryDayOfMonth: target.secretary.salaryDayOfMonth },
+      newValue: { salaryDayOfMonth },
+      reason: salaryDayOfMonth
+        ? `يوم راتب ${target.fullName}: ${salaryDayOfMonth} بواسطة ${user.fullName}`
+        : `إلغاء يوم راتب ${target.fullName} بواسطة ${user.fullName}`,
+    });
+    return NextResponse.json({ ok: true, salaryDayOfMonth });
+  }
+
   return NextResponse.json({ error: "قسم غير معروف" }, { status: 400 });
 }
 

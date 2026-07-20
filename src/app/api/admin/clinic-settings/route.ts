@@ -181,30 +181,5 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  if (section === "secretary_salary_day") {
-    const raw = Number(body.dayOfMonth);
-    const dayOfMonth =
-      Number.isFinite(raw) && raw >= 1 && raw <= 28 ? Math.floor(raw) : 0;
-    const note = String(body.note || "").trim().slice(0, 200);
-    const value = { dayOfMonth, note };
-    await prisma.clinicSetting.upsert({
-      where: { key: "secretary_salary_day" },
-      update: { value },
-      create: { key: "secretary_salary_day", value },
-    });
-    await createAuditLog({
-      userId: user.id,
-      roleCode: user.role.code,
-      action: "SECRETARY_SALARY_DAY_UPDATED",
-      entityType: "ClinicSetting",
-      entityId: "secretary_salary_day",
-      newValue: value,
-      reason: dayOfMonth
-        ? `ضبط يوم راتب السكرتارية: ${dayOfMonth} بواسطة ${user.fullName}`
-        : `إيقاف تذكير راتب السكرتارية بواسطة ${user.fullName}`,
-    });
-    return NextResponse.json({ ok: true });
-  }
-
   return NextResponse.json({ error: "قسم غير معروف" }, { status: 400 });
 }

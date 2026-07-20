@@ -389,6 +389,8 @@ model SecretaryProfile {
   workEndTime    String   @default("14:00")
   /// أيام العمل مفصولة بفاصلة: SUN,MON,TUE,WED,THU,SAT
   workDays       String   @default("SUN,MON,TUE,WED,THU,SAT")
+  /// يوم الشهر لدفع الراتب (1–31). null = غير محدد
+  salaryDayOfMonth Int?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }

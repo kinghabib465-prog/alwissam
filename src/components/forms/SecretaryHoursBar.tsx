@@ -107,6 +107,7 @@ export function SecretaryHoursBar({
   workStartTime,
   workEndTime,
   workDays,
+  salaryDayOfMonth,
   csrfToken,
   status,
   onDelete,
@@ -119,6 +120,7 @@ export function SecretaryHoursBar({
   workStartTime: string;
   workEndTime: string;
   workDays?: string;
+  salaryDayOfMonth?: number | null;
   csrfToken: string;
   status?: string;
   onDelete?: React.ReactNode;
@@ -131,6 +133,9 @@ export function SecretaryHoursBar({
   const [start, setStart] = useState(workStartTime || "07:00");
   const [end, setEnd] = useState(workEndTime || "14:00");
   const [days, setDays] = useState<string[]>(() => parseWorkDays(workDays));
+  const [salaryDay, setSalaryDay] = useState(
+    salaryDayOfMonth != null ? String(salaryDayOfMonth) : "",
+  );
   const [msg, setMsg] = useState("");
 
   async function saveHours(nextShift: string, nextStart: string, nextEnd: string) {
@@ -203,6 +208,40 @@ export function SecretaryHoursBar({
     }
   }
 
+  async function saveSalaryDay() {
+    setLoading(true);
+    setMsg("");
+    try {
+      const res = await fetch("/api/admin/secretaries", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken,
+        },
+        body: JSON.stringify({
+          section: "salary_day",
+          userId,
+          salaryDayOfMonth: salaryDay.trim() === "" ? null : Number(salaryDay),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMsg(data.error || "فشل حفظ يوم الراتب");
+        return;
+      }
+      setMsg(
+        data.salaryDayOfMonth
+          ? `يوم الراتب: ${data.salaryDayOfMonth} من كل شهر`
+          : "تم إلغاء يوم الراتب",
+      );
+      router.refresh();
+    } catch {
+      setMsg("تعذر الاتصال");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function toggleDay(code: string) {
     setMsg("");
     setDays((cur) =>
@@ -245,6 +284,11 @@ export function SecretaryHoursBar({
         <span className="rounded-full bg-[#F1F5F9] px-2.5 py-1 text-xs font-semibold text-navy">
           {workDaysLabel(days.join(","))}
         </span>
+        {salaryDayOfMonth != null && (
+          <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900">
+            راتب: يوم {toLatinDigits(salaryDayOfMonth)}
+          </span>
+        )}
         <Button size="sm" variant="teal" onClick={() => setHoursOpen((v) => !v)}>
           أوقات العمل
         </Button>
@@ -252,16 +296,39 @@ export function SecretaryHoursBar({
       </div>
 
       {expanded && (
-        <div className="border-t border-border px-4 py-3">
+        <div className="space-y-3 border-t border-border px-4 py-3">
           <EditSecretaryLoginForm
             userId={userId}
             initialEmail={email}
             initialPhone={phone}
             csrfToken={csrfToken}
           />
+          <div className="rounded-xl border border-border bg-[#FFFBEB] p-3">
+            <FormField label="يوم دفع الراتب لهذا السكرتير (1–31)">
+              <Input
+                type="number"
+                min={1}
+                max={31}
+                value={salaryDay}
+                onChange={(e) => setSalaryDay(e.target.value)}
+                placeholder="مثال: 18 أو 31"
+              />
+            </FormField>
+            <p className="mt-1 text-xs text-muted">
+              يوم 31 = آخر يوم في الأشهر الأقصر. اتركه فارغاً لإلغاء التذكير.
+            </p>
+            <Button
+              size="sm"
+              variant="teal"
+              className="mt-2"
+              loading={loading}
+              onClick={saveSalaryDay}
+            >
+              حفظ يوم الراتب
+            </Button>
+          </div>
         </div>
       )}
-
       {hoursOpen && (
         <div className="space-y-3 border-t border-border px-4 py-3">
           <p className="text-sm font-semibold text-navy">

@@ -1,47 +1,44 @@
-import { prisma } from "@/lib/db/prisma";
+/** يوم راتب لكل سكرتير (1–31). يوم 31 = آخر يوم في الأشهر الأقصر. */
 
-export type SecretarySalarySetting = {
-  /** يوم الشهر 1–28 (أو 0 = معطّل) */
-  dayOfMonth: number;
-  note: string;
-};
-
-const KEY = "secretary_salary_day";
-
-export async function loadSecretarySalarySetting(): Promise<SecretarySalarySetting> {
-  try {
-    const row = await prisma.clinicSetting.findUnique({ where: { key: KEY } });
-    const v = (row?.value || {}) as Partial<SecretarySalarySetting>;
-    const day = Number(v.dayOfMonth);
-    return {
-      dayOfMonth:
-        Number.isFinite(day) && day >= 1 && day <= 28 ? Math.floor(day) : 0,
-      note: String(v.note || "").trim(),
-    };
-  } catch {
-    return { dayOfMonth: 0, note: "" };
-  }
+export function algiersTodayParts(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Algiers",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value || 0);
+  return { year: get("year"), month: get("month"), day: get("day") };
 }
 
-export function isSecretarySalaryDueToday(
-  setting: SecretarySalarySetting,
+export function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/** هل اليوم (بتوقيت الجزائر) هو يوم دفع هذا السكرتير؟ */
+export function isSalaryDayDue(
+  salaryDayOfMonth: number | null | undefined,
   now = new Date(),
 ): boolean {
-  if (!setting.dayOfMonth) return false;
-  const day = Number(
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Africa/Algiers",
-      day: "numeric",
-    }).format(now),
-  );
-  return day === setting.dayOfMonth;
+  if (
+    salaryDayOfMonth == null ||
+    !Number.isFinite(salaryDayOfMonth) ||
+    salaryDayOfMonth < 1 ||
+    salaryDayOfMonth > 31
+  ) {
+    return false;
+  }
+  const { year, month, day } = algiersTodayParts(now);
+  const dim = daysInMonth(year, month);
+  const dueDay = Math.min(Math.floor(salaryDayOfMonth), dim);
+  return day === dueDay;
 }
 
-export function algiersDayOfMonth(now = new Date()): number {
-  return Number(
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Africa/Algiers",
-      day: "numeric",
-    }).format(now),
-  );
+export function normalizeSalaryDay(raw: unknown): number | null {
+  if (raw === "" || raw == null) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  const day = Math.floor(n);
+  if (day < 1 || day > 31) return null;
+  return day;
 }

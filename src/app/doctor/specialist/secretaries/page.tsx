@@ -6,12 +6,8 @@ import { navDoctorSpecialistAr } from "@/i18n/ar";
 import { CreateSecretaryForm } from "@/components/forms/CreateSecretaryForm";
 import { DeleteSecretaryButton } from "@/components/forms/DeleteSecretaryButton";
 import { SecretaryHoursBar } from "@/components/forms/SecretaryHoursBar";
-import { SecretarySalaryDayForm } from "@/components/doctor/SecretarySalaryDayForm";
-import {
-  isSecretarySalaryDueToday,
-  loadSecretarySalarySetting,
-} from "@/lib/secretary-salary";
-import { isClinicOwner } from "@/lib/auth/clinic-owner";
+import { isSalaryDayDue } from "@/lib/secretary-salary";
+import { toLatinDigits } from "@/lib/latin-digits";
 
 export const dynamic = "force-dynamic";
 
@@ -21,27 +17,32 @@ export default async function SpecialistSecretariesPage() {
     include: { user: true },
     orderBy: { createdAt: "asc" },
   });
-  const salary = await loadSecretarySalarySetting();
-  const salaryDue = isSecretarySalaryDueToday(salary);
-  const canEditSalary = isClinicOwner(user);
+
+  const dueToday = secretaries.filter((s) =>
+    isSalaryDayDue(s.salaryDayOfMonth),
+  );
 
   return (
     <DashboardShell items={navDoctorSpecialistAr as never} userName={user.fullName}>
       <TopHeader
         title="إدارة السكرتارية"
-        subtitle="تعديل الدخول · أوقات فتح الحساب · تذكير يوم الراتب"
+        subtitle="تعديل الدخول · أوقات العمل · يوم راتب لكل سكرتير"
       />
 
-      {salaryDue && (
+      {dueToday.length > 0 && (
         <div
           role="status"
-          className="mb-5 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm leading-7 text-amber-950"
+          className="mb-5 space-y-2 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm leading-7 text-amber-950"
         >
           <p className="font-bold">إشعار: اليوم موعد دفع راتب السكرتارية</p>
-          <p className="mt-1">
-            يوم الراتب المحدد: {salary.dayOfMonth} من كل شهر
-            {salary.note ? ` — ${salary.note}` : ""}
-          </p>
+          <ul className="list-disc pr-5">
+            {dueToday.map((s) => (
+              <li key={s.id}>
+                {s.user.fullName} — يوم{" "}
+                {toLatinDigits(s.salaryDayOfMonth || 0)} من كل شهر
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -52,6 +53,9 @@ export default async function SpecialistSecretariesPage() {
         </Card>
         <Card>
           <h2 className="mb-3 font-bold text-navy">الحسابات الحالية</h2>
+          <p className="mb-3 text-xs text-muted">
+            اضغط اسم السكرتير لضبط يوم الراتب الخاص به (مثل 18 أو 31).
+          </p>
           {secretaries.length === 0 ? (
             <EmptyState title="لا يوجد سكرتارية" />
           ) : (
@@ -67,6 +71,7 @@ export default async function SpecialistSecretariesPage() {
                   workStartTime={sec.workStartTime}
                   workEndTime={sec.workEndTime}
                   workDays={sec.workDays}
+                  salaryDayOfMonth={sec.salaryDayOfMonth}
                   csrfToken={user.csrfToken}
                   status={sec.user.status}
                   onDelete={
@@ -83,12 +88,6 @@ export default async function SpecialistSecretariesPage() {
             </div>
           )}
         </Card>
-        {canEditSalary && (
-          <Card className="lg:col-span-2">
-            <h2 className="mb-3 font-bold text-navy">تذكير يوم راتب السكرتارية</h2>
-            <SecretarySalaryDayForm csrfToken={user.csrfToken} initial={salary} />
-          </Card>
-        )}
       </div>
     </DashboardShell>
   );
